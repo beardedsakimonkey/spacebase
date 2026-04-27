@@ -4,7 +4,7 @@ import "./styles.css";
 import { createArena } from "./game/arena";
 import { BallController, createDefaultBallTuning } from "./game/ball";
 import { FollowCamera } from "./game/camera";
-import { DevHud, type RendererTuning, type ToneMappingMode } from "./game/hud";
+import { DevHud } from "./game/hud";
 import { InputController } from "./game/input";
 import { PlayerController, createDefaultPlayerTuning } from "./game/player";
 import { createDebugPhysicsObject, createPhysicsContext, syncPhysicsEntities } from "./game/physics";
@@ -23,31 +23,11 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.LinearToneMapping;
+renderer.toneMappingExposure = 1.1;
 renderer.domElement.tabIndex = 0;
 app.append(renderer.domElement);
 renderer.domElement.focus();
-
-const toneMappingModes: Record<ToneMappingMode, THREE.ToneMapping> = {
-  none: THREE.NoToneMapping,
-  linear: THREE.LinearToneMapping,
-  reinhard: THREE.ReinhardToneMapping,
-  cineon: THREE.CineonToneMapping,
-  aces: THREE.ACESFilmicToneMapping,
-  agx: THREE.AgXToneMapping,
-  neutral: THREE.NeutralToneMapping,
-};
-const rendererTuning: RendererTuning = {
-  toneMapping: "reinhard",
-  exposure: 1.05,
-};
-
-function applyRendererTuning() {
-  // Tone mapping is a full renderer mode, while exposure can be tuned continuously.
-  renderer.toneMapping = toneMappingModes[rendererTuning.toneMapping];
-  renderer.toneMappingExposure = rendererTuning.exposure;
-}
-
-applyRendererTuning();
 
 (async () => {
   const scene = new THREE.Scene();
@@ -71,9 +51,7 @@ applyRendererTuning();
   const hud = new DevHud({
     player: playerTuning,
     ball: ballTuning,
-    renderer: rendererTuning,
     debug: debugSettings,
-    onToneMappingChange: applyRendererTuning,
     onBalanceModeChange: () => player.applyBalanceMode(physics.world),
     onResetPlayer: () => player.reset(physics.world),
     onResetBall: () => ball.reset(physics.world),
@@ -106,7 +84,6 @@ applyRendererTuning();
 
   function animationFrame(now: number) {
     requestAnimationFrame(animationFrame);
-    renderer.toneMappingExposure = rendererTuning.exposure;
 
     const frameTime = Math.min((now - lastTime) / 1000, 0.1);
     lastTime = now;

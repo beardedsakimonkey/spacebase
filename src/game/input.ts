@@ -4,7 +4,6 @@ export type MovementInput = {
   left: boolean;
   right: boolean;
   jump: boolean;
-  run: boolean;
 };
 
 export class InputController {
@@ -41,7 +40,6 @@ export class InputController {
       left: this.keys.has("KeyA") || this.keys.has("ArrowLeft"),
       right: this.keys.has("KeyD") || this.keys.has("ArrowRight"),
       jump: this.keys.has("Space"),
-      run: this.keys.has("ShiftLeft") || this.keys.has("ShiftRight"),
     };
   }
 

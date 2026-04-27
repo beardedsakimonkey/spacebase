@@ -1,6 +1,7 @@
 import { rigidBody, sphere, MotionQuality, MotionType, type RigidBody, type World } from "crashcat";
 import type { Vec3 } from "mathcat";
 import * as THREE from "three";
+import { loadGltfScene } from "./kaykit";
 import type { PhysicsLayers } from "./physics";
 import type { PlayerController } from "./player";
 
@@ -42,7 +43,7 @@ export function createDefaultBallTuning(): BallTuning {
 
 export class BallController {
   readonly body: RigidBody;
-  readonly object: THREE.Mesh;
+  readonly object: THREE.Group;
   readonly tuning: BallTuning;
 
   private held = false;
@@ -71,19 +72,20 @@ export class BallController {
       motionQuality: MotionQuality.LINEAR_CAST,
     });
 
-    this.object = new THREE.Mesh(
-      new THREE.SphereGeometry(0.52, 28, 18),
-      new THREE.MeshStandardMaterial({
-        color: 0xfff480,
-        roughness: 0.42,
-        metalness: 0.02,
-        emissive: 0xff7a1a,
-        emissiveIntensity: 0.08,
-      }),
-    );
-    this.object.castShadow = true;
-    this.object.receiveShadow = true;
+    this.object = new THREE.Group();
     scene.add(this.object);
+
+    loadGltfScene("/assets/kaykit/ball.gltf").then((model) => {
+      // KayKit ball is radius 1; scale to match physics radius 0.52
+      model.scale.setScalar(0.52);
+      model.traverse((node) => {
+        if (node instanceof THREE.Mesh) {
+          node.castShadow = true;
+          node.receiveShadow = true;
+        }
+      });
+      this.object.add(model);
+    });
   }
 
   update(world: World, player: PlayerController, dt: number) {

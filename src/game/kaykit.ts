@@ -1,4 +1,4 @@
-import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { GLTFLoader, type GLTF } from "three/addons/loaders/GLTFLoader.js";
 import * as THREE from "three";
 
 const loader = new GLTFLoader();
@@ -15,6 +15,10 @@ export type TileTransform = { x: number; y: number; z: number; ry?: number };
 export async function loadGltfScene(path: string): Promise<THREE.Group> {
   const gltf = await loader.loadAsync(path);
   return gltf.scene;
+}
+
+export async function loadGltf(path: string): Promise<GLTF> {
+  return loader.loadAsync(path);
 }
 
 export async function loadGltfMesh(path: string): Promise<GltfMesh> {

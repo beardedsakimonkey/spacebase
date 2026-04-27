@@ -6,27 +6,14 @@ type DebugSettings = {
   helpers: boolean;
 };
 
-export type ToneMappingMode = "none" | "linear" | "reinhard" | "cineon" | "aces" | "agx" | "neutral";
-
-export type RendererTuning = {
-  toneMapping: ToneMappingMode;
-  exposure: number;
-};
-
 type NumericKey<T> = {
   [K in keyof T]: T[K] extends number ? K : never;
-}[keyof T];
-
-type StringKey<T> = {
-  [K in keyof T]: T[K] extends string ? K : never;
 }[keyof T];
 
 export type DevHudOptions = {
   player: PlayerTuning;
   ball: BallTuning;
-  renderer: RendererTuning;
   debug: DebugSettings;
-  onToneMappingChange: () => void;
   onBalanceModeChange: () => void;
   onResetPlayer: () => void;
   onResetBall: () => void;
@@ -63,7 +50,6 @@ export class DevHud {
       this.createReadouts(),
       this.createPlayerSection(),
       this.createBallSection(),
-      this.createRenderSection(),
       this.createDebugSection(),
       this.createActions(),
     );
@@ -112,8 +98,7 @@ export class DevHud {
   private createPlayerSection() {
     const section = this.createSection("Movement");
     section.append(
-      this.slider(this.options.player, "maxWalkSpeed", "Walk", 2, 14, 0.1),
-      this.slider(this.options.player, "maxRunSpeed", "Run", 4, 18, 0.1),
+      this.slider(this.options.player, "maxRunSpeed", "Speed", 4, 18, 0.1),
       this.slider(this.options.player, "accelerationTime", "Accel", 2, 16, 0.1),
       this.slider(this.options.player, "turnSpeed", "Turn", 2, 24, 0.1),
       this.slider(this.options.player, "airControlFactor", "Air", 0, 1, 0.01),
@@ -143,29 +128,6 @@ export class DevHud {
       this.slider(this.options.ball, "throwMinPower", "Min power", 0, 1, 0.01),
       this.slider(this.options.ball, "throwUpward", "Arc", 0, 18, 0.1),
       this.slider(this.options.ball, "throwChargeSeconds", "Charge", 0.2, 4, 0.05),
-    );
-    return section;
-  }
-
-  private createRenderSection() {
-    const section = this.createSection("Render");
-    section.append(
-      this.select(
-        this.options.renderer,
-        "toneMapping",
-        "Tone map",
-        [
-          ["aces", "ACES"],
-          ["agx", "AgX"],
-          ["neutral", "Neutral"],
-          ["reinhard", "Reinhard"],
-          ["cineon", "Cineon"],
-          ["linear", "Linear"],
-          ["none", "None"],
-        ],
-        this.options.onToneMappingChange,
-      ),
-      this.slider(this.options.renderer, "exposure", "Exposure", 0.2, 2.5, 0.01),
     );
     return section;
   }
@@ -259,39 +221,6 @@ export class DevHud {
     input.checked = Boolean(target[key]);
     input.addEventListener("change", () => {
       target[key] = input.checked as T[keyof T];
-      onChange?.();
-    });
-
-    const spacer = document.createElement("output");
-    spacer.textContent = "";
-
-    row.append(labelElement, input, spacer);
-    return row;
-  }
-
-  private select<T extends object>(
-    target: T,
-    key: StringKey<T>,
-    label: string,
-    options: Array<[T[StringKey<T>], string]>,
-    onChange?: () => void,
-  ) {
-    const row = document.createElement("div");
-    row.className = "hud-control";
-
-    const labelElement = document.createElement("label");
-    labelElement.textContent = label;
-
-    const input = document.createElement("select");
-    for (const [value, text] of options) {
-      const option = document.createElement("option");
-      option.value = String(value);
-      option.textContent = text;
-      input.append(option);
-    }
-    input.value = String(target[key]);
-    input.addEventListener("change", () => {
-      target[key] = input.value as T[StringKey<T>];
       onChange?.();
     });
 

@@ -18,16 +18,15 @@ import type { Vec3 } from "mathcat";
 import { vec3 } from "mathcat";
 import * as THREE from "three";
 import type { MovementInput } from "./input";
+import { loadGltf } from "./kaykit";
 import type { PhysicsLayers } from "./physics";
 
 export type PlayerTuning = {
   capsuleRadius: number;
   capsuleHalfHeight: number;
-  maxWalkSpeed: number;
   maxRunSpeed: number;
   accelerationTime: number;
   turnSpeed: number;
-  turnVelMultiplier: number;
   airControlFactor: number;
   dragDampingC: number;
   moveImpulsePointY: number;
@@ -62,9 +61,16 @@ export type PlayerTelemetry = {
 
 type PlayerInputState = {
   moveDirection: Vec3;
-  wantToRun: boolean;
   wantToJump: boolean;
 };
+
+type PlayerAnimationName = "idle" | "run" | "jumpStart" | "jumpIdle" | "jumpLand";
+
+const PLAYER_MODEL_SCALE = 0.82;
+const PLAYER_MODEL_OFFSET_Y = -0.9;
+const ANIMATION_FADE_SECONDS = 0.12;
+const JUMP_START_ANIMATION_SECONDS = 0.28;
+const LAND_ANIMATION_SECONDS = 0.24;
 
 const rayCollector = createClosestCastRayCollector();
 const raySettings = createDefaultCastRaySettings();
@@ -74,7 +80,6 @@ const ignoreSingleBodyFilterState = {
 };
 
 const rayOrigin: Vec3 = vec3.create();
-const movementDir: Vec3 = vec3.create();
 const currentHorizontal: Vec3 = vec3.create();
 const desiredHorizontal: Vec3 = vec3.create();
 const deltaVelocity: Vec3 = vec3.create();
@@ -101,11 +106,9 @@ export function createDefaultPlayerTuning(): PlayerTuning {
   return {
     capsuleRadius: 0.48,
     capsuleHalfHeight: 0.42,
-    maxWalkSpeed: 7,
-    maxRunSpeed: 11,
+    maxRunSpeed: 6,
     accelerationTime: 7.5,
     turnSpeed: 9,
-    turnVelMultiplier: 0.35,
     airControlFactor: 0.22,
     dragDampingC: 0.18,
     moveImpulsePointY: 0.42,
@@ -158,8 +161,8 @@ export class PlayerController {
   readonly tuning: PlayerTuning;
 
   private readonly queryFilter: Filter;
-  private readonly faceGroup = new THREE.Group();
   private readonly debugGroup = new THREE.Group();
+  private readonly animationActions = new Map<PlayerAnimationName, THREE.AnimationAction>();
   private readonly groundRayHelper = new THREE.ArrowHelper(
     new THREE.Vector3(0, -1, 0),
     new THREE.Vector3(),
@@ -174,12 +177,10 @@ export class PlayerController {
   );
   private readonly input: PlayerInputState = {
     moveDirection: vec3.create(),
-    wantToRun: false,
     wantToJump: false,
   };
 
   private modelYaw = 0;
-  private characterRotated = true;
   private reversalTurnTargetYaw: number | null = null;
   private reversalTurnSign = 0;
   private lastTurnSign = 1;
@@ -200,6 +201,10 @@ export class PlayerController {
   private jumpWasHeld = false;
   private airJumpsRemaining = 0;
   private airDashUsed = false;
+  private animationMixer: THREE.AnimationMixer | null = null;
+  private activeAnimation: PlayerAnimationName | null = null;
+  private jumpStartAnimationTimer = 0;
+  private landAnimationTimer = 0;
 
   constructor(world: World, layers: PhysicsLayers, scene: THREE.Scene, tuning = createDefaultPlayerTuning()) {
     this.tuning = tuning;
@@ -244,7 +249,6 @@ export class PlayerController {
     this.dashTimer = Math.max(0, this.dashTimer - dt);
     this.dashCooldownTimer = Math.max(0, this.dashCooldownTimer - dt);
     this.jumpGroundIgnoreTimer = Math.max(0, this.jumpGroundIgnoreTimer - dt);
-    this.input.wantToRun = input.run;
     this.input.wantToJump = input.jump;
     vec3.set(this.input.moveDirection, cameraMoveDirection.x, 0, cameraMoveDirection.z);
     this.body.friction = this.tuning.playerFriction;
@@ -266,6 +270,7 @@ export class PlayerController {
     this.applyAutoBalanceImpulse(world);
     this.handleJump(world);
     this.updateGravityScale();
+    this.updateAnimation(dt);
     this.syncVisual();
     this.updateDebugHelpers();
 
@@ -299,6 +304,9 @@ export class PlayerController {
     this.jumpGroundIgnoreTimer = 0;
     this.airJumpsRemaining = 0;
     this.airDashUsed = false;
+    this.jumpStartAnimationTimer = 0;
+    this.landAnimationTimer = 0;
+    this.playAnimation("idle", 0.05);
   }
 
   dash(world: World) {
@@ -309,10 +317,14 @@ export class PlayerController {
       return false;
     }
 
-    const forward = this.getForward();
-    this.dashDirection[0] = forward.x;
-    this.dashDirection[1] = 0;
-    this.dashDirection[2] = forward.z;
+    if (vec3.length(this.input.moveDirection) > 0.001) {
+      vec3.normalize(this.dashDirection, this.input.moveDirection);
+    } else {
+      const forward = this.getForward();
+      this.dashDirection[0] = forward.x;
+      this.dashDirection[1] = 0;
+      this.dashDirection[2] = forward.z;
+    }
     this.dashTimer = this.tuning.dashDuration;
     this.dashCooldownTimer = this.tuning.dashCooldown;
     if (!this.isOnGround) {
@@ -356,32 +368,141 @@ export class PlayerController {
 
   private createVisual() {
     const group = new THREE.Group();
-    const bodyMaterial = new THREE.MeshStandardMaterial({
-      color: 0xff4fd8,
-      roughness: 0.48,
-      metalness: 0.02,
-    });
-    const blackMaterial = new THREE.MeshStandardMaterial({
-      color: 0x10142f,
-      roughness: 0.6,
+
+    this.loadVisualModel(group).catch((error: unknown) => {
+      console.error("Failed to load player mannequin.", error);
     });
 
-    const body = new THREE.Mesh(
-      new THREE.CapsuleGeometry(this.tuning.capsuleRadius, this.tuning.capsuleHalfHeight * 2, 8, 18),
-      bodyMaterial,
-    );
-    body.castShadow = true;
-    body.receiveShadow = true;
-    group.add(body);
+    return group;
+  }
 
-    for (const x of [-0.14, 0.14]) {
-      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.045, 12, 8), blackMaterial);
-      eye.position.set(x, 0.23, 0.51);
-      this.faceGroup.add(eye);
+  private async loadVisualModel(group: THREE.Group) {
+    const [modelGltf, generalGltf, movementGltf] = await Promise.all([
+      loadGltf("/assets/kaykit/Mannequin_Medium.glb"),
+      loadGltf("/assets/kaykit/Rig_Medium_General.glb"),
+      loadGltf("/assets/kaykit/Rig_Medium_MovementBasic.glb"),
+    ]);
+
+    const model = modelGltf.scene;
+    model.scale.setScalar(PLAYER_MODEL_SCALE);
+    model.position.y = PLAYER_MODEL_OFFSET_Y;
+    model.traverse((node) => {
+      if (node instanceof THREE.Mesh) {
+        node.castShadow = true;
+        node.receiveShadow = true;
+      }
+    });
+    group.add(model);
+
+    this.animationMixer = new THREE.AnimationMixer(model);
+    this.bindAnimation("idle", model, generalGltf.animations, "Idle_A");
+    this.bindAnimation("run", model, movementGltf.animations, "Running_A");
+    this.bindAnimation("jumpStart", model, movementGltf.animations, "Jump_Start", true);
+    this.bindAnimation("jumpIdle", model, movementGltf.animations, "Jump_Idle");
+    this.bindAnimation("jumpLand", model, movementGltf.animations, "Jump_Land", true);
+    this.playAnimation("idle", 0);
+  }
+
+  private bindAnimation(
+    name: PlayerAnimationName,
+    model: THREE.Group,
+    clips: THREE.AnimationClip[],
+    clipName: string,
+    once = false,
+  ) {
+    if (!this.animationMixer) {
+      return;
     }
 
-    group.add(this.faceGroup);
-    return group;
+    const sourceClip = THREE.AnimationClip.findByName(clips, clipName);
+    if (!sourceClip) {
+      console.warn(`Missing player animation clip: ${clipName}`);
+      return;
+    }
+
+    const clip = this.filterClipForModel(sourceClip, model);
+    const action = this.animationMixer.clipAction(clip);
+    if (once) {
+      action.setLoop(THREE.LoopOnce, 1);
+      action.clampWhenFinished = true;
+    } else {
+      action.setLoop(THREE.LoopRepeat, Infinity);
+      action.clampWhenFinished = false;
+    }
+    this.animationActions.set(name, action);
+  }
+
+  private filterClipForModel(clip: THREE.AnimationClip, model: THREE.Group) {
+    const tracks = clip.tracks.filter((track) => {
+      const { nodeName } = THREE.PropertyBinding.parseTrackName(track.name);
+      return model.getObjectByName(nodeName) !== undefined;
+    });
+
+    if (tracks.length === clip.tracks.length) {
+      return clip;
+    }
+
+    return new THREE.AnimationClip(clip.name, clip.duration, tracks);
+  }
+
+  private updateAnimation(dt: number) {
+    if (!this.animationMixer) {
+      return;
+    }
+
+    if (!this.wasOnGround && this.isOnGround) {
+      this.landAnimationTimer = LAND_ANIMATION_SECONDS;
+    }
+
+    const velocity = this.body.motionProperties.linearVelocity;
+    const horizontalSpeed = Math.hypot(velocity[0], velocity[2]);
+    const desired = this.getDesiredAnimation(horizontalSpeed, dt);
+    const action = this.animationActions.get(desired);
+    if (action && desired === "run") {
+      action.timeScale = THREE.MathUtils.clamp(horizontalSpeed / 8.2, 0.8, 1.65);
+    } else if (action) {
+      action.timeScale = 1;
+    }
+
+    this.playAnimation(desired);
+    this.animationMixer.update(dt);
+  }
+
+  private getDesiredAnimation(horizontalSpeed: number, dt: number): PlayerAnimationName {
+    if (this.jumpStartAnimationTimer > 0) {
+      this.jumpStartAnimationTimer = Math.max(0, this.jumpStartAnimationTimer - dt);
+      return "jumpStart";
+    }
+
+    if (this.landAnimationTimer > 0) {
+      this.landAnimationTimer = Math.max(0, this.landAnimationTimer - dt);
+      return "jumpLand";
+    }
+
+    if (!this.isOnGround) {
+      return "jumpIdle";
+    }
+
+    if (horizontalSpeed > 0.35) {
+      return "run";
+    }
+
+    return "idle";
+  }
+
+  private playAnimation(name: PlayerAnimationName, fadeSeconds = ANIMATION_FADE_SECONDS) {
+    const next = this.animationActions.get(name);
+    if (!next || this.activeAnimation === name) {
+      return;
+    }
+
+    const previous = this.activeAnimation ? this.animationActions.get(this.activeAnimation) : undefined;
+    next.enabled = true;
+    next.reset();
+    next.setEffectiveWeight(1);
+    next.fadeIn(fadeSeconds).play();
+    previous?.fadeOut(fadeSeconds);
+    this.activeAnimation = name;
   }
 
   private updateModelYaw(dt: number, cameraPosition: THREE.Vector3) {
@@ -422,11 +543,9 @@ export class PlayerController {
       if (Math.abs(step) > 0.0001) {
         this.lastTurnSign = Math.sign(step);
       }
-      this.characterRotated = Math.abs(deltaYaw) < 0.03;
     } else {
       this.reversalTurnTargetYaw = null;
       this.reversalTurnSign = 0;
-      this.characterRotated = true;
     }
   }
 
@@ -503,32 +622,27 @@ export class PlayerController {
   }
 
   private applyMovementImpulse(world: World) {
-    movementDir[0] = Math.sin(this.modelYaw);
-    movementDir[1] = 0;
-    movementDir[2] = Math.cos(this.modelYaw);
-
-    const targetSpeed = this.input.wantToRun ? this.tuning.maxRunSpeed : this.tuning.maxWalkSpeed;
+    const targetSpeed = this.tuning.maxRunSpeed;
     const currentVelocity = this.body.motionProperties.linearVelocity;
 
     currentHorizontal[0] = currentVelocity[0];
     currentHorizontal[1] = 0;
     currentHorizontal[2] = currentVelocity[2];
 
-    desiredHorizontal[0] = movementDir[0] * targetSpeed;
+    desiredHorizontal[0] = this.input.moveDirection[0] * targetSpeed;
     desiredHorizontal[1] = 0;
-    desiredHorizontal[2] = movementDir[2] * targetSpeed;
+    desiredHorizontal[2] = this.input.moveDirection[2] * targetSpeed;
 
     deltaVelocity[0] = desiredHorizontal[0] - currentHorizontal[0];
     deltaVelocity[1] = 0;
     deltaVelocity[2] = desiredHorizontal[2] - currentHorizontal[2];
 
-    const control = this.characterRotated ? 1 : this.tuning.turnVelMultiplier;
     const air = this.canJump ? 1 : this.tuning.airControlFactor;
     const acceleration = 1 / Math.max(0.001, this.tuning.accelerationTime);
 
-    moveImpulse[0] = deltaVelocity[0] * acceleration * control * air;
+    moveImpulse[0] = deltaVelocity[0] * acceleration * air;
     moveImpulse[1] = 0;
-    moveImpulse[2] = deltaVelocity[2] * acceleration * control * air;
+    moveImpulse[2] = deltaVelocity[2] * acceleration * air;
 
     const position = this.body.position;
     impulsePoint[0] = position[0];
@@ -643,6 +757,8 @@ export class PlayerController {
     rigidBody.setLinearVelocity(world, this.body, [velocity[0], this.tuning.jumpVelocity, velocity[2]]);
     this.jumpGroundIgnoreTimer = this.tuning.jumpGroundIgnoreTime;
     this.canJump = false;
+    this.jumpStartAnimationTimer = JUMP_START_ANIMATION_SECONDS;
+    this.landAnimationTimer = 0;
   }
 
   private updateGravityScale() {
@@ -663,7 +779,6 @@ export class PlayerController {
     this.object.position.set(position[0], position[1], position[2]);
     // Render with stable gameplay yaw; physics auto-balance can jitter while correcting capsule rotation.
     this.object.rotation.set(0, this.modelYaw, 0);
-    this.faceGroup.quaternion.identity();
   }
 
   private updateDebugHelpers() {

@@ -1,23 +1,5 @@
-import type { BallTelemetry, BallTuning } from "./ball";
-import type { PlayerTelemetry, PlayerTuning } from "./player";
-
-type DebugSettings = {
-  physics: boolean;
-  helpers: boolean;
-};
-
-type NumericKey<T> = {
-  [K in keyof T]: T[K] extends number ? K : never;
-}[keyof T];
-
-export type DevHudOptions = {
-  player: PlayerTuning;
-  ball: BallTuning;
-  debug: DebugSettings;
-  onBalanceModeChange: () => void;
-  onResetPlayer: () => void;
-  onResetBall: () => void;
-};
+import type { BallTelemetry } from "./ball";
+import type { PlayerTelemetry } from "./player";
 
 export type DevHudStats = {
   fps: number;
@@ -30,7 +12,7 @@ export class DevHud {
   private readonly root = document.createElement("aside");
   private readonly readouts = new Map<string, HTMLElement>();
 
-  constructor(private readonly options: DevHudOptions) {
+  constructor() {
     this.root.className = "hud";
     this.root.setAttribute("aria-expanded", "true");
 
@@ -46,13 +28,7 @@ export class DevHud {
 
     const body = document.createElement("div");
     body.className = "hud-body";
-    body.append(
-      this.createReadouts(),
-      this.createPlayerSection(),
-      this.createBallSection(),
-      this.createDebugSection(),
-      this.createActions(),
-    );
+    body.append(this.createReadouts());
 
     this.root.append(header, body);
     document.body.append(this.root);
@@ -95,153 +71,10 @@ export class DevHud {
     return container;
   }
 
-  private createPlayerSection() {
-    const section = this.createSection("Movement");
-    section.append(
-      this.slider(this.options.player, "maxRunSpeed", "Speed", 4, 18, 0.1),
-      this.slider(this.options.player, "accelerationTime", "Accel", 2, 16, 0.1),
-      this.slider(this.options.player, "turnSpeed", "Turn", 2, 24, 0.1),
-      this.slider(this.options.player, "airControlFactor", "Air", 0, 1, 0.01),
-      this.slider(this.options.player, "playerFriction", "Friction", 0, 2, 0.01),
-      this.slider(this.options.player, "dragDampingC", "Drag", 0, 0.6, 0.01),
-      this.slider(this.options.player, "jumpVelocity", "Jump", 3, 11, 0.1),
-      this.slider(this.options.player, "airJumpCount", "Air jumps", 0, 3, 1),
-      this.slider(this.options.player, "landingDamping", "Landing", 0, 1, 0.01),
-      this.slider(this.options.player, "groundedSnapSpeed", "Contact", 0, 40, 0.5),
-      this.slider(this.options.player, "dashImpulse", "Dash", 0, 44, 0.1),
-      this.slider(this.options.player, "dashDuration", "Dash sec", 0.05, 1.2, 0.01),
-      this.slider(this.options.player, "dashUpwardImpulse", "Dash y", 0, 8, 0.1),
-      this.slider(this.options.player, "fallingGravityScale", "Fall g", 1, 5, 0.05),
-      this.checkbox(this.options.player, "enableAutoBalance", "Balance", this.options.onBalanceModeChange),
-      this.slider(this.options.player, "balanceSpringK", "Upright", 0, 1.4, 0.01),
-    );
-    return section;
-  }
-
-  private createBallSection() {
-    const section = this.createSection("Ball");
-    section.append(
-      this.slider(this.options.ball, "pickupRange", "Range", 0.8, 5, 0.05),
-      this.slider(this.options.ball, "holdDistance", "Hold dist", 0.6, 2.5, 0.05),
-      this.slider(this.options.ball, "holdHeight", "Hold y", -0.2, 1.4, 0.05),
-      this.slider(this.options.ball, "throwStrength", "Throw", 4, 60, 0.1),
-      this.slider(this.options.ball, "throwMinPower", "Min power", 0, 1, 0.01),
-      this.slider(this.options.ball, "throwUpward", "Arc", 0, 18, 0.1),
-      this.slider(this.options.ball, "throwChargeSeconds", "Charge", 0.2, 4, 0.05),
-    );
-    return section;
-  }
-
-  private createDebugSection() {
-    const section = this.createSection("Debug");
-    section.append(
-      this.checkbox(this.options.debug, "physics", "Physics"),
-      this.checkbox(this.options.debug, "helpers", "Rays"),
-    );
-    return section;
-  }
-
-  private createActions() {
-    const actions = document.createElement("div");
-    actions.className = "hud-actions";
-
-    const resetPlayer = document.createElement("button");
-    resetPlayer.type = "button";
-    resetPlayer.textContent = "Reset Player";
-    resetPlayer.addEventListener("click", this.options.onResetPlayer);
-
-    const resetBall = document.createElement("button");
-    resetBall.type = "button";
-    resetBall.textContent = "Reset Ball";
-    resetBall.addEventListener("click", this.options.onResetBall);
-
-    actions.append(resetPlayer, resetBall);
-    return actions;
-  }
-
-  private createSection(title: string) {
-    const section = document.createElement("section");
-    section.className = "hud-section";
-    const heading = document.createElement("h2");
-    heading.className = "hud-section-title";
-    heading.textContent = title;
-    section.append(heading);
-    return section;
-  }
-
-  private slider<T extends object>(
-    target: T,
-    key: NumericKey<T>,
-    label: string,
-    min: number,
-    max: number,
-    step: number,
-  ) {
-    const row = document.createElement("div");
-    row.className = "hud-control";
-
-    const labelElement = document.createElement("label");
-    labelElement.textContent = label;
-
-    const input = document.createElement("input");
-    input.type = "range";
-    input.min = String(min);
-    input.max = String(max);
-    input.step = String(step);
-    input.value = String(target[key]);
-
-    const output = document.createElement("output");
-    output.value = String(target[key]);
-    output.textContent = this.formatNumber(Number(target[key]));
-
-    input.addEventListener("input", () => {
-      target[key] = Number(input.value) as T[NumericKey<T>];
-      output.value = input.value;
-      output.textContent = this.formatNumber(Number(input.value));
-    });
-
-    row.append(labelElement, input, output);
-    return row;
-  }
-
-  private checkbox<T extends object>(
-    target: T,
-    key: keyof T,
-    label: string,
-    onChange?: () => void,
-  ) {
-    const row = document.createElement("div");
-    row.className = "hud-control";
-
-    const labelElement = document.createElement("label");
-    labelElement.textContent = label;
-
-    const input = document.createElement("input");
-    input.type = "checkbox";
-    input.checked = Boolean(target[key]);
-    input.addEventListener("change", () => {
-      target[key] = input.checked as T[keyof T];
-      onChange?.();
-    });
-
-    const spacer = document.createElement("output");
-    spacer.textContent = "";
-
-    row.append(labelElement, input, spacer);
-    return row;
-  }
-
   private setReadout(key: string, value: string) {
     const element = this.readouts.get(key);
     if (element) {
       element.textContent = value;
     }
-  }
-
-  private formatNumber(value: number) {
-    if (Math.abs(value) >= 10) {
-      return value.toFixed(1);
-    }
-    return value.toFixed(2);
   }
 }

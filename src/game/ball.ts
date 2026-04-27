@@ -5,7 +5,7 @@ import { loadGltfScene } from "./kaykit";
 import type { PhysicsLayers } from "./physics";
 import type { PlayerController } from "./player";
 
-export type BallTuning = {
+type BallTuning = {
   pickupRange: number;
   holdDistance: number;
   holdHeight: number;
@@ -13,7 +13,6 @@ export type BallTuning = {
   throwStrength: number;
   throwMinPower: number;
   throwUpward: number;
-  throwChargeSeconds: number;
 };
 
 export type BallTelemetry = {
@@ -28,23 +27,20 @@ const launchDirection = new THREE.Vector3();
 const spinAxis = new THREE.Vector3();
 const fallbackDirection = new THREE.Vector3();
 
-export function createDefaultBallTuning(): BallTuning {
-  return {
-    pickupRange: 2.15,
-    holdDistance: 1.25,
-    holdHeight: 0.4,
-    holdFollowStrength: 16,
-    throwStrength: 34,
-    throwMinPower: 0.45,
-    throwUpward: 7,
-    throwChargeSeconds: 1.8,
-  };
-}
+const BALL_TUNING: Readonly<BallTuning> = {
+  pickupRange: 2.15,
+  holdDistance: 1.25,
+  holdHeight: 0.4,
+  holdFollowStrength: 16,
+  throwStrength: 34,
+  throwMinPower: 0.45,
+  throwUpward: 7,
+};
 
 export class BallController {
   readonly body: RigidBody;
   readonly object: THREE.Group;
-  readonly tuning: BallTuning;
+  readonly tuning: Readonly<BallTuning>;
 
   private held = false;
   private pickupCooldown = 0;
@@ -55,7 +51,7 @@ export class BallController {
   private readonly playerForward = new THREE.Vector3();
   private readonly playerVelocity = new THREE.Vector3();
 
-  constructor(world: World, layers: PhysicsLayers, scene: THREE.Scene, tuning = createDefaultBallTuning()) {
+  constructor(world: World, layers: PhysicsLayers, scene: THREE.Scene, tuning = BALL_TUNING) {
     this.tuning = tuning;
     this.propLayer = layers.props;
     this.heldLayer = layers.heldProp;

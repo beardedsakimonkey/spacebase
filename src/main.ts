@@ -2,15 +2,16 @@ import { updateWorld } from "crashcat";
 import * as THREE from "three";
 import "./styles.css";
 import { createArena } from "./game/arena";
-import { BallController, createDefaultBallTuning } from "./game/ball";
+import { BallController } from "./game/ball";
 import { FollowCamera } from "./game/camera";
 import { DevHud } from "./game/hud";
 import { InputController } from "./game/input";
-import { PlayerController, createDefaultPlayerTuning } from "./game/player";
+import { PlayerController } from "./game/player";
 import { createDebugPhysicsObject, createPhysicsContext, syncPhysicsEntities } from "./game/physics";
 import { ThrowChargeMeter, TrajectoryPreview } from "./game/throw-preview";
 
 const PHYSICS_DT = 1 / 60;
+const THROW_CHARGE_SECONDS = 1.8;
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) {
@@ -35,27 +36,17 @@ renderer.domElement.focus();
   const input = new InputController(renderer.domElement);
   const physics = createPhysicsContext();
   const arena = await createArena(physics.world, physics.layers, scene);
-  const playerTuning = createDefaultPlayerTuning();
-  const ballTuning = createDefaultBallTuning();
-  const player = new PlayerController(physics.world, physics.layers, scene, playerTuning);
-  const ball = new BallController(physics.world, physics.layers, scene, ballTuning);
+  const player = new PlayerController(physics.world, physics.layers, scene);
+  const ball = new BallController(physics.world, physics.layers, scene);
   const debugPhysics = createDebugPhysicsObject(scene);
   const chargeMeter = new ThrowChargeMeter();
   const trajectoryPreview = new TrajectoryPreview(scene);
   const debugSettings = {
     physics: false,
-    helpers: false,
   };
   const playerRenderPosition = new THREE.Vector3();
 
-  const hud = new DevHud({
-    player: playerTuning,
-    ball: ballTuning,
-    debug: debugSettings,
-    onBalanceModeChange: () => player.applyBalanceMode(physics.world),
-    onResetPlayer: () => player.reset(physics.world),
-    onResetBall: () => ball.reset(physics.world),
-  });
+  const hud = new DevHud();
 
   window.addEventListener("resize", () => {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -125,7 +116,7 @@ renderer.domElement.focus();
     }
 
     if (throwCharging) {
-      throwChargePower = Math.min(1, throwChargePower + frameTime / ballTuning.throwChargeSeconds);
+      throwChargePower = Math.min(1, throwChargePower + frameTime / THROW_CHARGE_SECONDS);
       camera.getPointerRayDirection(input.getPointerPosition(), renderer.domElement, throwDirection);
       ball.computeThrowVelocity(throwVelocityVec, player, throwDirection, throwChargePower);
       throwVelocity.set(throwVelocityVec[0], throwVelocityVec[1], throwVelocityVec[2]);
@@ -156,7 +147,6 @@ renderer.domElement.focus();
 
       arena.update(elapsed, PHYSICS_DT);
       player.update(physics.world, movement, moveDirection, camera.camera.position, PHYSICS_DT);
-      player.setDebugVisible(debugSettings.helpers);
 
       if (pendingDrop) {
         ball.drop(physics.world);

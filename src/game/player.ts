@@ -21,7 +21,7 @@ import type { MovementInput } from "./input";
 import { loadGltf } from "./kaykit";
 import type { PhysicsLayers } from "./physics";
 
-export type PlayerTuning = {
+type PlayerTuning = {
   capsuleRadius: number;
   capsuleHalfHeight: number;
   maxRunSpeed: number;
@@ -102,39 +102,37 @@ function normalizeAngle(angle: number) {
   return angle;
 }
 
-export function createDefaultPlayerTuning(): PlayerTuning {
-  return {
-    capsuleRadius: 0.48,
-    capsuleHalfHeight: 0.42,
-    maxRunSpeed: 6,
-    accelerationTime: 7.5,
-    turnSpeed: 9,
-    airControlFactor: 0.22,
-    dragDampingC: 0.18,
-    moveImpulsePointY: 0.42,
-    playerFriction: 0.35,
-    maxSlopeAngle: 0.95,
-    enableAutoBalance: true,
-    balanceSpringK: 0.42,
-    balanceDampingC: 0.16,
-    balanceYawSpringK: 0.38,
-    balanceYawDampingC: 0.08,
-    jumpVelocity: 6.8,
-    airJumpCount: 1,
-    normalGravityScale: 1,
-    fallingGravityScale: 2.35,
-    maxFallSpeed: 22,
-    jumpGroundIgnoreTime: 0.14,
-    landingDamping: 0.2,
-    groundedSnapSpeed: 18,
-    groundContactTolerance: 0.04,
-    rayHitForgiveness: 0.04,
-    dashImpulse: 30,
-    dashUpwardImpulse: 1.9,
-    dashDuration: 0.44,
-    dashCooldown: 0.35,
-  };
-}
+const PLAYER_TUNING: Readonly<PlayerTuning> = {
+  capsuleRadius: 0.48,
+  capsuleHalfHeight: 0.42,
+  maxRunSpeed: 6,
+  accelerationTime: 7.5,
+  turnSpeed: 9,
+  airControlFactor: 0.22,
+  dragDampingC: 0.18,
+  moveImpulsePointY: 0.42,
+  playerFriction: 0.35,
+  maxSlopeAngle: 0.95,
+  enableAutoBalance: true,
+  balanceSpringK: 0.42,
+  balanceDampingC: 0.16,
+  balanceYawSpringK: 0.38,
+  balanceYawDampingC: 0.08,
+  jumpVelocity: 6.8,
+  airJumpCount: 1,
+  normalGravityScale: 1,
+  fallingGravityScale: 2.35,
+  maxFallSpeed: 22,
+  jumpGroundIgnoreTime: 0.14,
+  landingDamping: 0.2,
+  groundedSnapSpeed: 18,
+  groundContactTolerance: 0.04,
+  rayHitForgiveness: 0.04,
+  dashImpulse: 30,
+  dashUpwardImpulse: 1.9,
+  dashDuration: 0.44,
+  dashCooldown: 0.35,
+};
 
 function ignoreSingleBodyFilter(body: RigidBody): boolean {
   if (body.id === ignoreSingleBodyFilterState.bodyId) {
@@ -158,7 +156,7 @@ function resetIgnoreSingleBodyFilter(queryFilter: Filter) {
 export class PlayerController {
   readonly body: RigidBody;
   readonly object: THREE.Group;
-  readonly tuning: PlayerTuning;
+  readonly tuning: Readonly<PlayerTuning>;
 
   private readonly queryFilter: Filter;
   private readonly debugGroup = new THREE.Group();
@@ -206,7 +204,7 @@ export class PlayerController {
   private jumpStartAnimationTimer = 0;
   private landAnimationTimer = 0;
 
-  constructor(world: World, layers: PhysicsLayers, scene: THREE.Scene, tuning = createDefaultPlayerTuning()) {
+  constructor(world: World, layers: PhysicsLayers, scene: THREE.Scene, tuning = PLAYER_TUNING) {
     this.tuning = tuning;
     const shape: Shape = capsule.create({
       halfHeightOfCylinder: tuning.capsuleHalfHeight,
@@ -218,7 +216,7 @@ export class PlayerController {
       motionType: MotionType.DYNAMIC,
       position: [0, 3.5, 0],
       objectLayer: layers.player,
-      // MIN lets the player friction slider cap terrain contact grip instead of inheriting sticky surfaces.
+      // MIN lets player friction cap terrain contact grip instead of inheriting sticky surfaces.
       friction: tuning.playerFriction,
       frictionCombineMode: MaterialCombineMode.MIN,
       restitution: 0.05,
@@ -281,13 +279,6 @@ export class PlayerController {
 
   setDebugVisible(visible: boolean) {
     this.debugGroup.visible = visible;
-  }
-
-  applyBalanceMode(world: World) {
-    this.body.motionProperties.allowedDegreesOfFreedom = this.tuning.enableAutoBalance ? 0b111111 : 0b111000;
-    if (!this.tuning.enableAutoBalance) {
-      rigidBody.setAngularVelocity(world, this.body, [0, 0, 0]);
-    }
   }
 
   reset(world: World) {

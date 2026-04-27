@@ -2,23 +2,15 @@ import * as THREE from "three";
 
 export class ThrowChargeMeter {
   private readonly root = document.createElement("div");
-  private readonly knob = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+  private readonly fill = document.createElement("div");
 
   constructor() {
     this.root.className = "throw-meter";
-    this.root.innerHTML = `
-      <svg viewBox="0 0 120 180" aria-hidden="true">
-        <path class="throw-meter-track" d="M 28 156 Q 34 68 96 24" />
-      </svg>
-    `;
-
-    const svg = this.root.querySelector("svg");
-    if (!svg) {
-      throw new Error("Missing throw meter svg.");
-    }
-    this.knob.setAttribute("class", "throw-meter-knob");
-    this.knob.setAttribute("r", "8");
-    svg.append(this.knob);
+    const track = document.createElement("div");
+    track.className = "throw-meter-track";
+    this.fill.className = "throw-meter-fill";
+    track.append(this.fill);
+    this.root.append(track);
     document.body.append(this.root);
     this.setVisible(false);
     this.setPower(0);
@@ -30,11 +22,7 @@ export class ThrowChargeMeter {
 
   setPower(power: number) {
     const t = THREE.MathUtils.clamp(power, 0, 1);
-    const inv = 1 - t;
-    const x = inv * inv * 28 + 2 * inv * t * 34 + t * t * 96;
-    const y = inv * inv * 156 + 2 * inv * t * 68 + t * t * 24;
-    this.knob.setAttribute("cx", x.toFixed(2));
-    this.knob.setAttribute("cy", y.toFixed(2));
+    this.fill.style.transform = `scaleY(${Math.max(0.02, t)})`;
   }
 }
 
@@ -45,7 +33,8 @@ export class TrajectoryPreview {
     color: 0x35ff8d,
     transparent: true,
     opacity: 0.9,
-    depthTest: false,
+    depthTest: true,
+    depthWrite: false,
   });
   private readonly mesh: THREE.Mesh;
 

@@ -29,7 +29,6 @@ export type PlayerTuning = {
   turnSpeed: number;
   turnVelMultiplier: number;
   airControlFactor: number;
-  rejectVelMult: number;
   dragDampingC: number;
   moveImpulsePointY: number;
   playerFriction: number;
@@ -108,7 +107,6 @@ export function createDefaultPlayerTuning(): PlayerTuning {
     turnSpeed: 9,
     turnVelMultiplier: 0.35,
     airControlFactor: 0.22,
-    rejectVelMult: 3.5,
     dragDampingC: 0.18,
     moveImpulsePointY: 0.42,
     playerFriction: 0.35,
@@ -201,6 +199,7 @@ export class PlayerController {
   private jumpGroundIgnoreTimer = 0;
   private jumpWasHeld = false;
   private airJumpsRemaining = 0;
+  private airDashUsed = false;
 
   constructor(world: World, layers: PhysicsLayers, scene: THREE.Scene, tuning = createDefaultPlayerTuning()) {
     this.tuning = tuning;
@@ -299,10 +298,14 @@ export class PlayerController {
     this.dashCooldownTimer = 0;
     this.jumpGroundIgnoreTimer = 0;
     this.airJumpsRemaining = 0;
+    this.airDashUsed = false;
   }
 
   dash(world: World) {
     if (this.dashCooldownTimer > 0) {
+      return false;
+    }
+    if (!this.isOnGround && this.airDashUsed) {
       return false;
     }
 
@@ -312,6 +315,9 @@ export class PlayerController {
     this.dashDirection[2] = forward.z;
     this.dashTimer = this.tuning.dashDuration;
     this.dashCooldownTimer = this.tuning.dashCooldown;
+    if (!this.isOnGround) {
+      this.airDashUsed = true;
+    }
     this.applyDashVelocity(world, true);
     return true;
   }
@@ -355,11 +361,6 @@ export class PlayerController {
       roughness: 0.48,
       metalness: 0.02,
     });
-    const bellyMaterial = new THREE.MeshStandardMaterial({
-      color: 0x46c7ff,
-      roughness: 0.55,
-      metalness: 0.02,
-    });
     const blackMaterial = new THREE.MeshStandardMaterial({
       color: 0x10142f,
       roughness: 0.6,
@@ -372,12 +373,6 @@ export class PlayerController {
     body.castShadow = true;
     body.receiveShadow = true;
     group.add(body);
-
-    const belly = new THREE.Mesh(new THREE.SphereGeometry(0.34, 18, 10), bellyMaterial);
-    belly.scale.set(0.95, 0.72, 0.18);
-    belly.position.set(0, -0.06, 0.43);
-    belly.castShadow = true;
-    this.faceGroup.add(belly);
 
     for (const x of [-0.14, 0.14]) {
       const eye = new THREE.Mesh(new THREE.SphereGeometry(0.045, 12, 8), blackMaterial);
@@ -501,6 +496,7 @@ export class PlayerController {
         this.canJump = this.actualSlopeAngle < this.tuning.maxSlopeAngle;
         if (this.canJump) {
           this.airJumpsRemaining = this.getMaxAirJumps();
+          this.airDashUsed = false;
         }
       }
     }
@@ -634,7 +630,7 @@ export class PlayerController {
     const jumpPressed = this.input.wantToJump && !this.jumpWasHeld;
     this.jumpWasHeld = this.input.wantToJump;
 
-    if (!jumpPressed || !this.canUseJump()) {
+    if (!jumpPressed || !this.canUseJump() || this.dashTimer > 0) {
       return;
     }
 

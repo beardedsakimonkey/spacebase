@@ -72,10 +72,6 @@ export class Arena {
   private redRamp!: THREE.Group;
   private blueFlag!: THREE.Group;
   private redFlag!: THREE.Group;
-  private blueArchWide!: THREE.Group;
-  private redArchWide!: THREE.Group;
-  private blueSafetyNet!: THREE.Group;
-  private redSafetyNet!: THREE.Group;
   private conveyorTextures: THREE.Texture[] = [];
 
   private constructor(
@@ -119,10 +115,6 @@ export class Arena {
       rampRed,
       flagBlue,
       flagRed,
-      archWideBlue,
-      archWideRed,
-      safetyNetBlue,
-      safetyNetRed,
     ] = await Promise.all([
       loadGltfMesh(platformerAsset("yellow", "platform_6x6x4")),
       loadGltfMesh(platformerAsset("blue", "platform_6x6x4")),
@@ -137,10 +129,6 @@ export class Arena {
       loadModel(platformerAsset("red", "platform_slope_4x6x4")),
       loadModel(platformerAsset("blue", "flag_C")),
       loadModel(platformerAsset("red", "flag_C")),
-      loadModel(platformerAsset("blue", "arch_wide")),
-      loadModel(platformerAsset("red", "arch_wide")),
-      loadModel(platformerAsset("blue", "safetynet_6x2x1")),
-      loadModel(platformerAsset("red", "safetynet_6x2x1")),
     ]);
 
     this.platform6x6x4 = platform6x6x4;
@@ -156,10 +144,6 @@ export class Arena {
     this.redRamp = rampRed;
     this.blueFlag = flagBlue;
     this.redFlag = flagRed;
-    this.blueArchWide = archWideBlue;
-    this.redArchWide = archWideRed;
-    this.blueSafetyNet = safetyNetBlue;
-    this.redSafetyNet = safetyNetRed;
     this.conveyorTextures = [
       ...conveyorLongBlue.textures,
       ...conveyorLongRed.textures,
@@ -305,23 +289,11 @@ export class Arena {
     addTiles(this.scene, this.bluePlatform6x6x4, blueDeckTiles);
     addTiles(this.scene, this.redBarrierLow, redLowBarriers);
     addTiles(this.scene, this.blueBarrierLow, blueLowBarriers);
-
-    addModelInstances(this.scene, this.redSafetyNet, [
-      { x: -9, y: SECOND_STORY_TOP, z: 43.9 },
-      { x: -15.9, y: SECOND_STORY_TOP, z: 37, ry: Math.PI / 2 },
-    ]);
-    addModelInstances(this.scene, this.blueSafetyNet, [
-      { x: 9, y: SECOND_STORY_TOP, z: -43.9, ry: Math.PI },
-      { x: 15.9, y: SECOND_STORY_TOP, z: -37, ry: Math.PI / 2 },
-    ]);
   }
 
   private buildBaseDecor() {
     addModelInstances(this.scene, this.redFlag, [{ x: 0, y: 0, z: 39, ry: Math.PI * 1.5 }]);
     addModelInstances(this.scene, this.blueFlag, [{ x: 0, y: 0, z: -39, ry: Math.PI / 2 }]);
-
-    addModelInstances(this.scene, this.redArchWide, [{ x: 0, y: 0, z: 21.2, ry: Math.PI }]);
-    addModelInstances(this.scene, this.blueArchWide, [{ x: 0, y: 0, z: -21.2 }]);
   }
 }
 

@@ -111,8 +111,6 @@ export class BallController {
       rigidBody.setAngularVelocity(world, this.body, zeroAngular);
     }
 
-    this.syncVisual();
-
     if (this.body.position[1] < -14) {
       this.reset(world);
     }

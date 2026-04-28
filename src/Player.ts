@@ -20,6 +20,7 @@ import * as THREE from "three";
 import type { MovementInput } from "./input";
 import { characterAnimationAsset, characterMannequinAsset } from "./assets";
 import { getConveyorVelocity } from "./Conveyor";
+import { PlayerAnimator } from "./PlayerAnimator";
 import { loadGltf } from "./util/kaykit";
 import type { PhysicsLayers } from "./physics";
 
@@ -64,22 +65,14 @@ type PlayerInputState = {
   wantToJump: boolean;
 };
 
-type PlayerAnimationName = "idle" | "run" | "jumpStart" | "jumpIdle" | "jumpLand" | "throw" | "dash";
-
 const PLAYER_MODEL_SCALE = 0.82;
 const PLAYER_MODEL_OFFSET_Y = -0.9;
 const MOVE_INPUT_EPSILON = 0.001;
 const TURN_TARGET_EPSILON = 0.08;
 const REVERSAL_TURN_THRESHOLD = Math.PI * 0.82;
-const RUN_ANIMATION_BASE_SPEED = 8.2;
 const MIN_SAFE_DURATION = 0.001;
 const MAX_GROUND_CORRECTION_SPEED = 2;
 const RESPAWN_Y = -14;
-const ANIMATION_FADE_SECONDS = 0.12;
-const JUMP_START_ANIMATION_SECONDS = 0.28;
-const LAND_ANIMATION_SECONDS = 0.24;
-const THROW_ANIMATION_SECONDS = 1.37 / 2;
-const DASH_ANIMATION_SECONDS = 0.40;
 
 const rayCollector = createClosestCastRayCollector();
 const raySettings = createDefaultCastRaySettings();
@@ -169,7 +162,7 @@ export class PlayerController {
 
   private readonly queryFilter: Filter;
   private readonly debugGroup = new THREE.Group();
-  private readonly animationActions = new Map<PlayerAnimationName, THREE.AnimationAction>();
+  private readonly animator = new PlayerAnimator();
   private readonly groundRayHelper = new THREE.ArrowHelper(
     new THREE.Vector3(0, -1, 0),
     new THREE.Vector3(),
@@ -209,12 +202,6 @@ export class PlayerController {
   private jumpWasHeld = false;
   private airJumpsRemaining = 0;
   private airDashUsed = false;
-  private animationMixer: THREE.AnimationMixer | null = null;
-  private activeAnimation: PlayerAnimationName | null = null;
-  private jumpStartAnimationTimer = 0;
-  private landAnimationTimer = 0;
-  private throwAnimationTimer = 0;
-  private dashAnimationTimer = 0;
 
   constructor(world: World, layers: PhysicsLayers, scene: THREE.Scene, tuning = PLAYER_TUNING) {
     this.tuning = tuning;
@@ -316,11 +303,7 @@ export class PlayerController {
     vec3.set(this.groundPosition, 0, 0, 0);
     vec3.set(this.groundSurfaceVelocity, 0, 0, 0);
     this.groundDistance = 0;
-    this.jumpStartAnimationTimer = 0;
-    this.landAnimationTimer = 0;
-    this.throwAnimationTimer = 0;
-    this.dashAnimationTimer = 0;
-    this.playAnimation("idle", 0.05);
+    this.animator.reset();
   }
 
   startThrowAnimation(direction: THREE.Vector3) {
@@ -329,10 +312,7 @@ export class PlayerController {
     if (Math.hypot(hx, hz) > MOVE_INPUT_EPSILON) {
       this.facingYaw = Math.atan2(hx, hz);
     }
-    this.throwAnimationTimer = THROW_ANIMATION_SECONDS;
-    this.dashAnimationTimer = 0;
-    this.jumpStartAnimationTimer = 0;
-    this.landAnimationTimer = 0;
+    this.animator.startThrow();
   }
 
   dash(world: World) {
@@ -356,10 +336,7 @@ export class PlayerController {
     if (!this.isOnGround) {
       this.airDashUsed = true;
     }
-    this.dashAnimationTimer = DASH_ANIMATION_SECONDS;
-    this.throwAnimationTimer = 0;
-    this.jumpStartAnimationTimer = 0;
-    this.landAnimationTimer = 0;
+    this.animator.startDash();
     this.applyDashVelocity(world, true);
     return true;
   }
@@ -425,134 +402,21 @@ export class PlayerController {
     });
     group.add(model);
 
-    this.animationMixer = new THREE.AnimationMixer(model);
-    this.bindAnimation("idle", model, generalGltf.animations, "Idle_A");
-    this.bindAnimation("run", model, movementGltf.animations, "Running_B");
-    this.bindAnimation("jumpStart", model, movementGltf.animations, "Jump_Start", true);
-    this.bindAnimation("jumpIdle", model, movementGltf.animations, "Jump_Idle");
-    this.bindAnimation("jumpLand", model, movementGltf.animations, "Jump_Land", true);
-    this.bindAnimation("throw", model, generalGltf.animations, "Throw", true);
-    this.bindAnimation("dash", model, movementAdvancedGltf.animations, "Dodge_Forward", true);
-    this.playAnimation("idle", 0);
-  }
-
-  private bindAnimation(
-    name: PlayerAnimationName,
-    model: THREE.Group,
-    clips: THREE.AnimationClip[],
-    clipName: string,
-    once = false,
-  ) {
-    if (!this.animationMixer) {
-      return;
-    }
-
-    const sourceClip = THREE.AnimationClip.findByName(clips, clipName);
-    if (!sourceClip) {
-      console.warn(`Missing player animation clip: ${clipName}`);
-      return;
-    }
-
-    const clip = this.filterClipForModel(sourceClip, model);
-    const action = this.animationMixer.clipAction(clip);
-    if (once) {
-      action.setLoop(THREE.LoopOnce, 1);
-      action.clampWhenFinished = true;
-    } else {
-      action.setLoop(THREE.LoopRepeat, Infinity);
-      action.clampWhenFinished = false;
-    }
-    this.animationActions.set(name, action);
-  }
-
-  private filterClipForModel(clip: THREE.AnimationClip, model: THREE.Group) {
-    const tracks = clip.tracks.filter((track) => {
-      const { nodeName } = THREE.PropertyBinding.parseTrackName(track.name);
-      return model.getObjectByName(nodeName) !== undefined;
-    });
-
-    if (tracks.length === clip.tracks.length) {
-      return clip;
-    }
-
-    return new THREE.AnimationClip(clip.name, clip.duration, tracks);
+    this.animator.attach(model, generalGltf.animations, movementGltf.animations, movementAdvancedGltf.animations);
   }
 
   private updateAnimation(dt: number) {
-    if (!this.animationMixer) {
-      return;
-    }
-
-    if (!this.wasOnGround && this.isOnGround) {
-      this.landAnimationTimer = LAND_ANIMATION_SECONDS;
-    }
-
     const velocity = this.body.motionProperties.linearVelocity;
-    const horizontalSpeed = Math.hypot(velocity[0], velocity[2]);
-    const wantsRunAnimation = this.hasMoveInput() || this.dashTimer > 0;
-    const desired = this.advanceAndSelectAnimation(wantsRunAnimation, dt);
-    const action = this.animationActions.get(desired);
-    if (action && desired === "run") {
-      action.timeScale = THREE.MathUtils.clamp(horizontalSpeed / RUN_ANIMATION_BASE_SPEED, 0.8, 1.65);
-    } else if (action && (desired === "throw" || desired === "jumpStart")) {
-      action.timeScale = 2;
-    } else if (action) {
-      action.timeScale = 1;
-    }
-
-    this.playAnimation(desired);
-    this.animationMixer.update(dt);
-  }
-
-  private advanceAndSelectAnimation(wantsRunAnimation: boolean, dt: number): PlayerAnimationName {
-    if (this.throwAnimationTimer > 0) {
-      this.throwAnimationTimer = Math.max(0, this.throwAnimationTimer - dt);
-      return "throw";
-    }
-
-    if (this.dashAnimationTimer > 0) {
-      this.dashAnimationTimer = Math.max(0, this.dashAnimationTimer - dt);
-      return "dash";
-    }
-
-    if (this.jumpStartAnimationTimer > 0) {
-      this.jumpStartAnimationTimer = Math.max(0, this.jumpStartAnimationTimer - dt);
-      return "jumpStart";
-    }
-
-    if (this.landAnimationTimer > 0) {
-      this.landAnimationTimer = Math.max(0, this.landAnimationTimer - dt);
-      return "jumpLand";
-    }
-
-    if (!this.isOnGround) {
-      return "jumpIdle";
-    }
-
-    if (wantsRunAnimation) {
-      return "run";
-    }
-
-    return "idle";
-  }
-
-  private playAnimation(name: PlayerAnimationName, fadeSeconds = ANIMATION_FADE_SECONDS) {
-    const next = this.animationActions.get(name);
-    if (!next || this.activeAnimation === name) {
-      return;
-    }
-
-    const previous = this.activeAnimation ? this.animationActions.get(this.activeAnimation) : undefined;
-    next.enabled = true;
-    next.reset();
-    next.setEffectiveWeight(1);
-    next.fadeIn(fadeSeconds).play();
-    previous?.fadeOut(fadeSeconds);
-    this.activeAnimation = name;
+    this.animator.update(dt, {
+      wasOnGround: this.wasOnGround,
+      isOnGround: this.isOnGround,
+      wantsRunAnimation: this.hasMoveInput() || this.dashTimer > 0,
+      horizontalSpeed: Math.hypot(velocity[0], velocity[2]),
+    });
   }
 
   private updateFacingYaw(dt: number, cameraPosition: THREE.Vector3) {
-    if (this.throwAnimationTimer > 0) {
+    if (this.animator.isThrowing()) {
       return;
     }
     if (this.hasMoveInput()) {
@@ -796,8 +660,7 @@ export class PlayerController {
     rigidBody.setLinearVelocity(world, this.body, [velocity[0], this.tuning.jumpVelocity, velocity[2]]);
     this.jumpGroundIgnoreTimer = this.tuning.jumpGroundIgnoreTime;
     this.canJump = false;
-    this.jumpStartAnimationTimer = JUMP_START_ANIMATION_SECONDS;
-    this.landAnimationTimer = 0;
+    this.animator.startJump();
   }
 
   private updateGravityScale() {

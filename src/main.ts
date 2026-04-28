@@ -8,7 +8,6 @@ import { DevHud } from "./hud";
 import { InputController } from "./input";
 import { PlayerController } from "./Player";
 import { createDebugPhysicsObject, createPhysicsContext, syncPhysicsEntities } from "./physics";
-import { ThrowChargeMeter, TrajectoryPreview } from "./throw-preview";
 
 const PHYSICS_DT = 1 / 60;
 const THROW_CHARGE_SECONDS = 1.8;
@@ -39,8 +38,6 @@ renderer.domElement.focus();
   const player = new PlayerController(physics.world, physics.layers, scene);
   const ball = new BallController(physics.world, physics.layers, scene);
   const debugPhysics = createDebugPhysicsObject(scene);
-  const chargeMeter = new ThrowChargeMeter();
-  const trajectoryPreview = new TrajectoryPreview(scene);
   const debugSettings = {
     physics: false,
   };
@@ -67,7 +64,6 @@ renderer.domElement.focus();
   let pendingReset = false;
   let pendingDebugToggle = false;
   const throwDirection = new THREE.Vector3();
-  const throwOrigin = new THREE.Vector3();
   const throwVelocity = new THREE.Vector3();
   const throwVelocityVec: [number, number, number] = [0, 0, 0];
   let throwCharging = false;
@@ -120,8 +116,6 @@ renderer.domElement.focus();
       camera.getPointerRayDirection(input.getPointerPosition(), renderer.domElement, throwDirection);
       ball.computeThrowVelocity(throwVelocityVec, player, throwDirection, throwChargePower);
       throwVelocity.set(throwVelocityVec[0], throwVelocityVec[1], throwVelocityVec[2]);
-      trajectoryPreview.update(ball.getPosition(throwOrigin), throwVelocity, -9.81);
-      chargeMeter.setPower(throwChargePower);
 
       // Reaching full charge auto-throws even if the mouse button stays held.
       if (throwChargePower >= 1) {
@@ -135,9 +129,6 @@ renderer.domElement.focus();
       }
       pendingThrowRelease = false;
     }
-
-    chargeMeter.setVisible(throwCharging && !pendingChargedThrow);
-    trajectoryPreview.setVisible(throwCharging && !pendingChargedThrow);
 
     while (accumulator >= PHYSICS_DT) {
       if (pendingReset) {
@@ -163,8 +154,6 @@ renderer.domElement.focus();
         ball.throw(physics.world, player, throwDirection, throwChargePower);
         throwCharging = false;
         throwChargePower = 0;
-        chargeMeter.setVisible(false);
-        trajectoryPreview.setVisible(false);
         pendingChargedThrow = false;
       }
 

@@ -19,8 +19,8 @@ import { vec3 } from "mathcat";
 import * as THREE from "three";
 import type { MovementInput } from "./input";
 import { characterAnimationAsset, characterMannequinAsset } from "./assets";
-import { getConveyorVelocity } from "./conveyor";
-import { loadGltf } from "./kaykit";
+import { getConveyorVelocity } from "./Conveyor";
+import { loadGltf } from "./util/kaykit";
 import type { PhysicsLayers } from "./physics";
 
 type PlayerTuning = {

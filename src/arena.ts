@@ -17,8 +17,8 @@ import {
   CONVEYOR_SPEED,
   createConveyorListener,
   loadConveyorModel,
-} from "./conveyor";
-import { buildInstancedMesh, loadGltfMesh, loadGltfScene, type GltfMesh, type TileTransform } from "./kaykit";
+} from "./Conveyor";
+import { buildInstancedMesh, loadGltfMesh, loadGltfScene, type GltfMesh, type TileTransform } from "./util/kaykit";
 import type { PhysicsEntity, PhysicsLayers } from "./physics";
 
 type ModelTransform = TileTransform & {
@@ -37,7 +37,7 @@ const SECOND_STORY_TOP = 4;
 const BASE_XS = [-18, -12, -6, 0, 6, 12, 18];
 const RED_BASE_ZS = [24, 30, 36, 42];
 const BLUE_BASE_ZS = [-24, -30, -36, -42];
-const CORRIDOR_ZS = [-18, -12, -6, 0, 6, 12, 18];
+const CORRIDOR_ZS = [-14, -10, -6, -2, 2, 6, 10, 14];
 const LEFT_BELT_X = -5.1;
 const RIGHT_BELT_X = 5.1;
 const Y_AXIS: Vec3 = [0, 1, 0];
@@ -59,7 +59,8 @@ export class Arena {
   readonly entities: PhysicsEntity[] = [];
   readonly listener: Listener = createConveyorListener();
 
-  private platform6x6x4!: GltfMesh;
+  private bluePlatform4x4x4!: GltfMesh;
+  private redPlatform4x4x4!: GltfMesh;
   private bluePlatform6x6x4!: GltfMesh;
   private redPlatform6x6x4!: GltfMesh;
   private blueBarrierTall!: GltfMesh;
@@ -102,7 +103,8 @@ export class Arena {
 
   private async loadAssets() {
     const [
-      platform6x6x4,
+      platform4x4x4Blue,
+      platform4x4x4Red,
       platform6x6x4Blue,
       platform6x6x4Red,
       barrierTallBlue,
@@ -116,7 +118,8 @@ export class Arena {
       flagBlue,
       flagRed,
     ] = await Promise.all([
-      loadGltfMesh(platformerAsset("yellow", "platform_6x6x4")),
+      loadGltfMesh(platformerAsset("blue", "platform_4x4x4")),
+      loadGltfMesh(platformerAsset("red", "platform_4x4x4")),
       loadGltfMesh(platformerAsset("blue", "platform_6x6x4")),
       loadGltfMesh(platformerAsset("red", "platform_6x6x4")),
       loadGltfMesh(platformerAsset("blue", "barrier_4x1x4")),
@@ -131,7 +134,8 @@ export class Arena {
       loadModel(platformerAsset("red", "flag_C")),
     ]);
 
-    this.platform6x6x4 = platform6x6x4;
+    this.bluePlatform4x4x4 = platform4x4x4Blue;
+    this.redPlatform4x4x4 = platform4x4x4Red;
     this.bluePlatform6x6x4 = platform6x6x4Blue;
     this.redPlatform6x6x4 = platform6x6x4Red;
     this.blueBarrierTall = barrierTallBlue;
@@ -151,7 +155,8 @@ export class Arena {
   }
 
   private buildFloorPlan() {
-    const yellowTiles: TileTransform[] = [];
+    const blueCorridorTiles: TileTransform[] = [];
+    const redCorridorTiles: TileTransform[] = [];
     const blueTiles: TileTransform[] = [];
     const redTiles: TileTransform[] = [];
 
@@ -165,13 +170,14 @@ export class Arena {
     }
 
     for (const z of CORRIDOR_ZS) {
-      const tiles = z < 0 ? blueTiles : z > 0 ? redTiles : yellowTiles;
-      addPlatformTile(this.world, this.layers, tiles, 0, z, FLOOR_TOP);
+      const tiles = z < 0 ? blueCorridorTiles : redCorridorTiles;
+      addPlatformTile(this.world, this.layers, tiles, 0, z, FLOOR_TOP, 2);
     }
 
-    addTiles(this.scene, this.platform6x6x4, yellowTiles);
     addTiles(this.scene, this.bluePlatform6x6x4, blueTiles);
     addTiles(this.scene, this.redPlatform6x6x4, redTiles);
+    addTiles(this.scene, this.bluePlatform4x4x4, blueCorridorTiles);
+    addTiles(this.scene, this.redPlatform4x4x4, redCorridorTiles);
   }
 
   private buildConveyors() {
@@ -336,9 +342,10 @@ function addPlatformTile(
   x: number,
   z: number,
   top: number,
+  halfExtent = 3,
 ) {
   tiles.push({ x, y: top - PLATFORM_HEIGHT, z });
-  staticBox(world, layers.terrain, [3, PLATFORM_HEIGHT / 2, 3], [x, top - PLATFORM_HEIGHT / 2, z], {
+  staticBox(world, layers.terrain, [halfExtent, PLATFORM_HEIGHT / 2, halfExtent], [x, top - PLATFORM_HEIGHT / 2, z], {
     friction: 1.45,
     restitution: 0.06,
   });

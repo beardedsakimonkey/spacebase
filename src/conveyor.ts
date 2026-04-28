@@ -9,7 +9,7 @@ import {
 } from "crashcat";
 import type { Vec3 } from "mathcat";
 import * as THREE from "three";
-import { loadGltfScene } from "./kaykit";
+import { loadGltfScene } from "./util/kaykit";
 import type { PhysicsLayers } from "./physics";
 
 export type ConveyorModel = {

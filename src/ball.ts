@@ -2,7 +2,7 @@ import { rigidBody, sphere, MotionQuality, MotionType, type RigidBody, type Worl
 import type { Vec3 } from "mathcat";
 import * as THREE from "three";
 import { platformerNeutralAsset } from "./assets";
-import { loadGltfScene } from "./kaykit";
+import { loadGltfScene } from "./util/kaykit";
 import type { PhysicsLayers } from "./physics";
 import type { PlayerController } from "./Player";
 

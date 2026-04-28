@@ -68,6 +68,13 @@ type PlayerAnimationName = "idle" | "run" | "jumpStart" | "jumpIdle" | "jumpLand
 
 const PLAYER_MODEL_SCALE = 0.82;
 const PLAYER_MODEL_OFFSET_Y = -0.9;
+const MOVE_INPUT_EPSILON = 0.001;
+const TURN_TARGET_EPSILON = 0.08;
+const REVERSAL_TURN_THRESHOLD = Math.PI * 0.82;
+const RUN_ANIMATION_BASE_SPEED = 8.2;
+const MIN_SAFE_DURATION = 0.001;
+const MAX_GROUND_CORRECTION_SPEED = 2;
+const RESPAWN_Y = -14;
 const ANIMATION_FADE_SECONDS = 0.12;
 const JUMP_START_ANIMATION_SECONDS = 0.28;
 const LAND_ANIMATION_SECONDS = 0.24;
@@ -95,8 +102,10 @@ const upCorrection: Vec3 = vec3.create();
 const yawCorrection: Vec3 = vec3.create();
 const balanceTorque: Vec3 = vec3.create();
 const dashVelocity: Vec3 = vec3.create();
+const worldUp: Vec3 = vec3.fromValues(0, 1, 0);
 const visualPosition = new THREE.Vector3();
 const visualForward = new THREE.Vector3();
+const debugGroundNormal = new THREE.Vector3();
 
 function normalizeAngle(angle: number) {
   while (angle > Math.PI) angle -= Math.PI * 2;
@@ -131,7 +140,7 @@ const PLAYER_TUNING: Readonly<PlayerTuning> = {
   dashImpulse: 30,
   dashUpwardImpulse: 1.9,
   dashDuration: 0.44,
-  dashCooldown: 0.35,
+  dashCooldown: 0.7,
 };
 
 function ignoreSingleBodyFilter(body: RigidBody): boolean {
@@ -178,7 +187,8 @@ export class PlayerController {
     wantToJump: false,
   };
 
-  private modelYaw = 0;
+  // Stable authored facing, decoupled from the dynamic body's noisy collision rotation.
+  private facingYaw = 0;
   private reversalTurnTargetYaw: number | null = null;
   private reversalTurnSign = 0;
   private lastTurnSign = 1;
@@ -253,13 +263,13 @@ export class PlayerController {
     vec3.set(this.input.moveDirection, cameraMoveDirection.x, 0, cameraMoveDirection.z);
     this.body.friction = this.tuning.playerFriction;
 
-    this.updateModelYaw(dt, cameraPosition);
+    this.updateFacingYaw(dt, cameraPosition);
     this.updateGround(world);
     this.applyLandingDamping(world);
 
     if (this.dashTimer > 0) {
       this.applyDashVelocity(world);
-    } else if (vec3.length(this.input.moveDirection) > 0.001) {
+    } else if (this.hasMoveInput()) {
       this.applyMovementImpulse(world);
     } else {
       this.applyDragImpulse(world);
@@ -270,12 +280,11 @@ export class PlayerController {
     this.handleJump(world);
     this.updateGravityScale();
     this.updateAnimation(dt);
-    this.syncVisual();
-    this.updateDebugHelpers();
 
-    if (this.body.position[1] < -14) {
+    if (this.body.position[1] < RESPAWN_Y) {
       this.reset(world);
     }
+    this.updateDebugHelpers();
   }
 
   setDebugVisible(visible: boolean) {
@@ -287,15 +296,26 @@ export class PlayerController {
     rigidBody.setLinearVelocity(world, this.body, [0, 0, 0]);
     rigidBody.setAngularVelocity(world, this.body, [0, 0, 0]);
     this.body.quaternion = [0, 0, 0, 1];
-    this.modelYaw = 0;
+    this.facingYaw = 0;
     this.reversalTurnTargetYaw = null;
     this.reversalTurnSign = 0;
     this.lastTurnSign = 1;
     this.dashTimer = 0;
     this.dashCooldownTimer = 0;
     this.jumpGroundIgnoreTimer = 0;
+    this.jumpWasHeld = false;
     this.airJumpsRemaining = 0;
     this.airDashUsed = false;
+    this.isOnGround = false;
+    this.canJump = false;
+    this.wasOnGround = false;
+    vec3.set(this.actualSlopeNormal, 0, 1, 0);
+    this.actualSlopeAngle = 0;
+    this.groundBodyId = null;
+    this.groundSubShapeId = 0;
+    vec3.set(this.groundPosition, 0, 0, 0);
+    vec3.set(this.groundSurfaceVelocity, 0, 0, 0);
+    this.groundDistance = 0;
     this.jumpStartAnimationTimer = 0;
     this.landAnimationTimer = 0;
     this.throwAnimationTimer = 0;
@@ -306,8 +326,8 @@ export class PlayerController {
   startThrowAnimation(direction: THREE.Vector3) {
     const hx = direction.x;
     const hz = direction.z;
-    if (Math.hypot(hx, hz) > 0.001) {
-      this.modelYaw = Math.atan2(hx, hz);
+    if (Math.hypot(hx, hz) > MOVE_INPUT_EPSILON) {
+      this.facingYaw = Math.atan2(hx, hz);
     }
     this.throwAnimationTimer = THROW_ANIMATION_SECONDS;
     this.dashAnimationTimer = 0;
@@ -323,7 +343,7 @@ export class PlayerController {
       return false;
     }
 
-    if (vec3.length(this.input.moveDirection) > 0.001) {
+    if (this.hasMoveInput()) {
       vec3.normalize(this.dashDirection, this.input.moveDirection);
     } else {
       const forward = this.getForward();
@@ -350,12 +370,16 @@ export class PlayerController {
   }
 
   getForward(out = visualForward) {
-    return out.set(Math.sin(this.modelYaw), 0, Math.cos(this.modelYaw)).normalize();
+    return out.set(Math.sin(this.facingYaw), 0, Math.cos(this.facingYaw)).normalize();
   }
 
   getVelocity(out = new THREE.Vector3()) {
     const velocity = this.body.motionProperties.linearVelocity;
     return out.set(velocity[0], velocity[1], velocity[2]);
+  }
+
+  private hasMoveInput() {
+    return vec3.length(this.input.moveDirection) > MOVE_INPUT_EPSILON;
   }
 
   private canUseJump() {
@@ -465,12 +489,12 @@ export class PlayerController {
 
     const velocity = this.body.motionProperties.linearVelocity;
     const horizontalSpeed = Math.hypot(velocity[0], velocity[2]);
-    const wantsRunAnimation = vec3.length(this.input.moveDirection) > 0.001 || this.dashTimer > 0;
-    const desired = this.getDesiredAnimation(wantsRunAnimation, dt);
+    const wantsRunAnimation = this.hasMoveInput() || this.dashTimer > 0;
+    const desired = this.advanceAndSelectAnimation(wantsRunAnimation, dt);
     const action = this.animationActions.get(desired);
     if (action && desired === "run") {
-      action.timeScale = THREE.MathUtils.clamp(horizontalSpeed / 8.2, 0.8, 1.65);
-    } else if (action && desired === "throw") {
+      action.timeScale = THREE.MathUtils.clamp(horizontalSpeed / RUN_ANIMATION_BASE_SPEED, 0.8, 1.65);
+    } else if (action && (desired === "throw" || desired === "jumpStart")) {
       action.timeScale = 2;
     } else if (action) {
       action.timeScale = 1;
@@ -480,7 +504,7 @@ export class PlayerController {
     this.animationMixer.update(dt);
   }
 
-  private getDesiredAnimation(wantsRunAnimation: boolean, dt: number): PlayerAnimationName {
+  private advanceAndSelectAnimation(wantsRunAnimation: boolean, dt: number): PlayerAnimationName {
     if (this.throwAnimationTimer > 0) {
       this.throwAnimationTimer = Math.max(0, this.throwAnimationTimer - dt);
       return "throw";
@@ -527,44 +551,44 @@ export class PlayerController {
     this.activeAnimation = name;
   }
 
-  private updateModelYaw(dt: number, cameraPosition: THREE.Vector3) {
+  private updateFacingYaw(dt: number, cameraPosition: THREE.Vector3) {
     if (this.throwAnimationTimer > 0) {
       return;
     }
-    if (vec3.length(this.input.moveDirection) > 0.001) {
+    if (this.hasMoveInput()) {
       const targetYaw = Math.atan2(this.input.moveDirection[0], this.input.moveDirection[2]);
-      let deltaYaw = normalizeAngle(targetYaw - this.modelYaw);
+      let deltaYaw = normalizeAngle(targetYaw - this.facingYaw);
       const targetChanged =
         this.reversalTurnTargetYaw !== null &&
-        Math.abs(normalizeAngle(targetYaw - this.reversalTurnTargetYaw)) > 0.08;
+        Math.abs(normalizeAngle(targetYaw - this.reversalTurnTargetYaw)) > TURN_TARGET_EPSILON;
 
       if (targetChanged) {
         this.reversalTurnTargetYaw = null;
         this.reversalTurnSign = 0;
       }
 
-      if (Math.abs(deltaYaw) > Math.PI * 0.82) {
+      if (Math.abs(deltaYaw) > REVERSAL_TURN_THRESHOLD) {
         if (this.reversalTurnSign === 0) {
           // Lock reversal direction once; recalculating this every frame can flip signs and jitter.
           const position = this.body.position;
           const cameraSideX = cameraPosition.x - position[0];
           const cameraSideZ = cameraPosition.z - position[2];
-          const positiveTurnMidYaw = this.modelYaw + Math.PI / 2;
+          const positiveTurnMidYaw = this.facingYaw + Math.PI / 2;
           const positiveTurnMidX = Math.sin(positiveTurnMidYaw);
           const positiveTurnMidZ = Math.cos(positiveTurnMidYaw);
           const cameraDot = positiveTurnMidX * cameraSideX + positiveTurnMidZ * cameraSideZ;
           this.reversalTurnTargetYaw = targetYaw;
-          this.reversalTurnSign = Math.abs(cameraDot) > 0.001 ? Math.sign(cameraDot) : this.lastTurnSign;
+          this.reversalTurnSign = Math.abs(cameraDot) > MOVE_INPUT_EPSILON ? Math.sign(cameraDot) : this.lastTurnSign;
         }
 
         deltaYaw = Math.abs(deltaYaw) * this.reversalTurnSign;
-      } else if (Math.abs(deltaYaw) < 0.08) {
+      } else if (Math.abs(deltaYaw) < TURN_TARGET_EPSILON) {
         this.reversalTurnTargetYaw = null;
         this.reversalTurnSign = 0;
       }
 
       const step = Math.max(-this.tuning.turnSpeed * dt, Math.min(this.tuning.turnSpeed * dt, deltaYaw));
-      this.modelYaw += step;
+      this.facingYaw += step;
       if (Math.abs(step) > 0.0001) {
         this.lastTurnSign = Math.sign(step);
       }
@@ -575,7 +599,7 @@ export class PlayerController {
   }
 
   private updateGround(world: World) {
-    this.actualSlopeNormal = [0, 1, 0];
+    vec3.set(this.actualSlopeNormal, 0, 1, 0);
     this.actualSlopeAngle = 0;
     this.canJump = false;
     vec3.set(this.groundSurfaceVelocity, 0, 0, 0);
@@ -613,7 +637,7 @@ export class PlayerController {
 
     this.isOnGround = true;
     this.groundDistance = hitDistance;
-    this.groundPosition = [rayOrigin[0], rayOrigin[1] - hitDistance, rayOrigin[2]];
+    vec3.set(this.groundPosition, rayOrigin[0], rayOrigin[1] - hitDistance, rayOrigin[2]);
     this.groundBodyId = rayCollector.hit.bodyIdB;
     this.groundSubShapeId = rayCollector.hit.subShapeId;
 
@@ -626,7 +650,7 @@ export class PlayerController {
       }
       rigidBody.getSurfaceNormal(this.actualSlopeNormal, groundBody, this.groundPosition, this.groundSubShapeId);
       this.actualSlopeAngle = Math.acos(
-        Math.max(-1, Math.min(1, vec3.dot(this.actualSlopeNormal, [0, 1, 0] as Vec3))),
+        THREE.MathUtils.clamp(vec3.dot(this.actualSlopeNormal, worldUp), -1, 1),
       );
       this.canJump = this.actualSlopeAngle < this.tuning.maxSlopeAngle;
       if (this.canJump) {
@@ -657,7 +681,7 @@ export class PlayerController {
     deltaVelocity[2] = desiredHorizontal[2] - currentHorizontal[2];
 
     const air = this.canJump ? 1 : this.tuning.airControlFactor;
-    const acceleration = 1 / Math.max(0.001, this.tuning.accelerationTime);
+    const acceleration = 1 / Math.max(MIN_SAFE_DURATION, this.tuning.accelerationTime);
 
     moveImpulse[0] = deltaVelocity[0] * acceleration * air;
     moveImpulse[1] = 0;
@@ -672,7 +696,7 @@ export class PlayerController {
 
   private applyDashVelocity(world: World, includeUpwardImpulse = false) {
     const velocity = this.body.motionProperties.linearVelocity;
-    const dashDuration = Math.max(0.001, this.tuning.dashDuration);
+    const dashDuration = Math.max(MIN_SAFE_DURATION, this.tuning.dashDuration);
     const dashSpeed = this.tuning.dashImpulse * Math.max(0, Math.min(1, this.dashTimer / dashDuration));
 
     // Dash input is locked, so speed decays across the committed dash instead of being re-applied flat.
@@ -716,7 +740,7 @@ export class PlayerController {
       return;
     }
 
-    const correctionVelocity = Math.min(contactError * this.tuning.groundedSnapSpeed, 2);
+    const correctionVelocity = Math.min(contactError * this.tuning.groundedSnapSpeed, MAX_GROUND_CORRECTION_SPEED);
     if (velocity[1] >= correctionVelocity) {
       return;
     }
@@ -736,13 +760,13 @@ export class PlayerController {
     vec3.set(bodyForward, 0, 0, 1);
     vec3.transformQuat(bodyForward, bodyForward, bodyRotation);
 
-    vec3.cross(upCorrection, bodyUp, [0, 1, 0]);
+    vec3.cross(upCorrection, bodyUp, worldUp);
 
-    desiredForward[0] = Math.sin(this.modelYaw);
+    desiredForward[0] = Math.sin(this.facingYaw);
     desiredForward[1] = 0;
-    desiredForward[2] = Math.cos(this.modelYaw);
+    desiredForward[2] = Math.cos(this.facingYaw);
     bodyForward[1] = 0;
-    if (vec3.length(bodyForward) > 0.001) {
+    if (vec3.length(bodyForward) > MOVE_INPUT_EPSILON) {
       vec3.normalize(bodyForward, bodyForward);
     }
     vec3.cross(yawCorrection, bodyForward, desiredForward);
@@ -791,7 +815,7 @@ export class PlayerController {
     const position = this.body.position;
     this.object.position.set(position[0], position[1], position[2]);
     // Render with stable gameplay yaw; physics auto-balance can jitter while correcting capsule rotation.
-    this.object.rotation.set(0, this.modelYaw, 0);
+    this.object.rotation.set(0, this.facingYaw, 0);
   }
 
   private updateDebugHelpers() {
@@ -799,6 +823,7 @@ export class PlayerController {
     this.groundRayHelper.position.set(position[0], position[1] - this.tuning.capsuleHalfHeight, position[2]);
     this.groundRayHelper.setLength(this.groundDistance > 0 ? this.groundDistance : 1);
     this.groundRayHelper.setColor(this.isOnGround ? 0x34e0a1 : 0xff3b30);
+    this.groundNormalHelper.visible = this.isOnGround;
 
     if (this.isOnGround) {
       this.groundNormalHelper.position.set(
@@ -806,9 +831,8 @@ export class PlayerController {
         this.groundPosition[1],
         this.groundPosition[2],
       );
-      this.groundNormalHelper.setDirection(
-        new THREE.Vector3(this.actualSlopeNormal[0], this.actualSlopeNormal[1], this.actualSlopeNormal[2]),
-      );
+      debugGroundNormal.set(this.actualSlopeNormal[0], this.actualSlopeNormal[1], this.actualSlopeNormal[2]);
+      this.groundNormalHelper.setDirection(debugGroundNormal);
     }
   }
 }

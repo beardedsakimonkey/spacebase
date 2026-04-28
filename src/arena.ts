@@ -2,6 +2,7 @@ import { box, MotionType, rigidBody, type RigidBody, type World } from "crashcat
 import type { Quat, Vec3 } from "mathcat";
 import { quat } from "mathcat";
 import * as THREE from "three";
+import { ASSETS } from "./assets";
 import { buildInstancedMesh, loadGltfMesh, type GltfMesh, type TileTransform } from "./kaykit";
 import type { PhysicsEntity, PhysicsLayers } from "./physics";
 
@@ -108,11 +109,11 @@ async function loadArenaAssets(): Promise<ArenaAssets> {
     barrierTall,
     barrierLow,
   ] = await Promise.all([
-    loadGltfMesh("/assets/KayKit_Platformer_Pack_1.0_SOURCE/Assets/gltf/yellow/platform_6x6x4_yellow.gltf"),
-    loadGltfMesh("/assets/KayKit_Platformer_Pack_1.0_SOURCE/Assets/gltf/blue/platform_6x6x4_blue.gltf"),
-    loadGltfMesh("/assets/KayKit_Platformer_Pack_1.0_SOURCE/Assets/gltf/red/platform_6x6x4_red.gltf"),
-    loadGltfMesh("/assets/KayKit_Platformer_Pack_1.0_SOURCE/Assets/gltf/red/barrier_4x1x4_red.gltf"),
-    loadGltfMesh("/assets/KayKit_Platformer_Pack_1.0_SOURCE/Assets/gltf/red/barrier_4x1x2_red.gltf"),
+    loadGltfMesh(ASSETS.platform_yellow),
+    loadGltfMesh(ASSETS.platform_blue),
+    loadGltfMesh(ASSETS.platform_red),
+    loadGltfMesh(ASSETS.barrier_tall),
+    loadGltfMesh(ASSETS.barrier_low),
   ]);
 
   return {

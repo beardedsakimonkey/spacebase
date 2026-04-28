@@ -1,14 +1,14 @@
 import { updateWorld } from "crashcat";
 import * as THREE from "three";
 import "./styles.css";
-import { createArena } from "./game/arena";
-import { BallController } from "./game/ball";
-import { FollowCamera } from "./game/camera";
-import { DevHud } from "./game/hud";
-import { InputController } from "./game/input";
-import { PlayerController } from "./game/player";
-import { createDebugPhysicsObject, createPhysicsContext, syncPhysicsEntities } from "./game/physics";
-import { ThrowChargeMeter, TrajectoryPreview } from "./game/throw-preview";
+import { createArena } from "./arena";
+import { BallController } from "./ball";
+import { FollowCamera } from "./camera";
+import { DevHud } from "./hud";
+import { InputController } from "./input";
+import { PlayerController } from "./player";
+import { createDebugPhysicsObject, createPhysicsContext, syncPhysicsEntities } from "./physics";
+import { ThrowChargeMeter, TrajectoryPreview } from "./throw-preview";
 
 const PHYSICS_DT = 1 / 60;
 const THROW_CHARGE_SECONDS = 1.8;

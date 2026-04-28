@@ -1,6 +1,7 @@
 import { rigidBody, sphere, MotionQuality, MotionType, type RigidBody, type World } from "crashcat";
 import type { Vec3 } from "mathcat";
 import * as THREE from "three";
+import { ASSETS } from "./assets";
 import { loadGltfScene } from "./kaykit";
 import type { PhysicsLayers } from "./physics";
 import type { PlayerController } from "./player";
@@ -71,7 +72,7 @@ export class BallController {
     this.object = new THREE.Group();
     scene.add(this.object);
 
-    loadGltfScene("/assets/KayKit_Platformer_Pack_1.0_SOURCE/Assets/gltf/neutral/ball.gltf").then((model) => {
+    loadGltfScene(ASSETS.ball).then((model) => {
       // KayKit ball is radius 1; scale to match physics radius 0.52
       model.scale.setScalar(0.52);
       model.traverse((node) => {

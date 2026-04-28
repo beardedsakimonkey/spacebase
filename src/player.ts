@@ -18,6 +18,7 @@ import type { Vec3 } from "mathcat";
 import { vec3 } from "mathcat";
 import * as THREE from "three";
 import type { MovementInput } from "./input";
+import { ASSETS } from "./assets";
 import { loadGltf } from "./kaykit";
 import type { PhysicsLayers } from "./physics";
 
@@ -359,9 +360,9 @@ export class PlayerController {
 
   private async loadVisualModel(group: THREE.Group) {
     const [modelGltf, generalGltf, movementGltf] = await Promise.all([
-      loadGltf("/assets/KayKit_Character_Animations_1.1/Mannequin Character/characters/Mannequin_Medium.glb"),
-      loadGltf("/assets/KayKit_Character_Animations_1.1/Animations/gltf/Rig_Medium/Rig_Medium_General.glb"),
-      loadGltf("/assets/KayKit_Character_Animations_1.1/Animations/gltf/Rig_Medium/Rig_Medium_MovementBasic.glb"),
+      loadGltf(ASSETS.mannequin),
+      loadGltf(ASSETS.rig_general),
+      loadGltf(ASSETS.rig_movement),
     ]);
 
     const model = modelGltf.scene;

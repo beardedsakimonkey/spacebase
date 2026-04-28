@@ -53,7 +53,6 @@ export function addConveyorSegment(
   x: number,
   z: number,
   ry: number,
-  halfZ: number,
 ) {
   const object = model.clone(true);
   object.position.set(x, CONVEYOR_Y, z);
@@ -62,7 +61,7 @@ export function addConveyorSegment(
 
   const velocity = conveyorVelocityFromYaw(ry);
   rigidBody.create(world, {
-    shape: box.create({ halfExtents: [CONVEYOR_HALF_X, CONVEYOR_HALF_Y, halfZ] }),
+    shape: box.create({ halfExtents: [CONVEYOR_HALF_X, CONVEYOR_HALF_Y, CONVEYOR_LONG_HALF_Z] }),
     motionType: MotionType.STATIC,
     objectLayer: layers.terrain,
     position: [x, CONVEYOR_CENTER_Y, z],

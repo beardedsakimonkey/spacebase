@@ -1,7 +1,10 @@
 import {
   box,
+  ConstraintSpace,
   convexHull,
+  hingeConstraint,
   MotionType,
+  MotorState,
   rigidBody,
   type Listener,
   type World,
@@ -15,7 +18,6 @@ import {
   addConveyorSegment,
   animateConveyorTextures,
   CONVEYOR_HALF_X,
-  CONVEYOR_LONG_HALF_Z,
   createConveyorListener,
   loadConveyorModel,
 } from "./Conveyor";
@@ -61,6 +63,9 @@ const CORRIDOR_WALL_X = OUTER_CORRIDOR_X + PLATFORM_HALF_EXTENT + BARRIER_HALF_T
 const Y_AXIS: Vec3 = [0, 1, 0];
 const SKY_RADIUS = 500;
 const STAR_COUNT = 4000;
+const SWIPER_HALF_EXTENTS: Vec3 = [4.5, 0.75, 0.5];
+const SWIPER_CENTER_Y = FLOOR_TOP + SWIPER_HALF_EXTENTS[1];
+const SWIPER_ANGULAR_SPEED = 2.6;
 const RAMP_COLLIDER_SHAPE = convexHull.create({
   positions: [
     -2, 0, -3,
@@ -88,6 +93,8 @@ export class Arena {
   private redConveyorLong!: THREE.Group;
   private blueRamp!: THREE.Group;
   private redRamp!: THREE.Group;
+  private blueSwiperDoubleLong!: THREE.Group;
+  private redSwiperDoubleLong!: THREE.Group;
   private conveyorTextures: THREE.Texture[] = [];
   private sunShadowDebug!: SunShadowDebug;
 
@@ -109,6 +116,7 @@ export class Arena {
     arena.buildConveyors();
     arena.buildBoundaryWalls();
     arena.buildRaisedDecks();
+    arena.buildSwipers();
 
     return arena;
   }
@@ -148,6 +156,8 @@ export class Arena {
       conveyorLongRed,
       rampBlue,
       rampRed,
+      swiperBlue,
+      swiperRed,
     ] = await Promise.all([
       loadGltfMesh(platformerAsset("blue", "platform_6x6x4")),
       loadGltfMesh(platformerAsset("red", "platform_6x6x4")),
@@ -158,6 +168,8 @@ export class Arena {
       loadConveyorModel(platformerAsset("red", "conveyor_4x8x1")),
       loadModel(platformerAsset("blue", "platform_slope_4x6x4")),
       loadModel(platformerAsset("red", "platform_slope_4x6x4")),
+      loadModel(platformerAsset("blue", "swiper_double_long")),
+      loadModel(platformerAsset("red", "swiper_double_long")),
     ]);
 
     this.bluePlatform6x6x4 = platform6x6x4Blue;
@@ -169,6 +181,8 @@ export class Arena {
     this.redConveyorLong = conveyorLongRed.model;
     this.blueRamp = rampBlue;
     this.redRamp = rampRed;
+    this.blueSwiperDoubleLong = swiperBlue;
+    this.redSwiperDoubleLong = swiperRed;
     this.conveyorTextures = [
       ...conveyorLongBlue.textures,
       ...conveyorLongRed.textures,
@@ -219,7 +233,6 @@ export class Arena {
           lane.x,
           z,
           lane.ry,
-          CONVEYOR_LONG_HALF_Z,
         );
       }
 
@@ -232,7 +245,6 @@ export class Arena {
           lane.x,
           z,
           lane.ry,
-          CONVEYOR_LONG_HALF_Z,
         );
       }
     }
@@ -316,6 +328,29 @@ export class Arena {
     addTiles(this.scene, this.bluePlatform6x6x4, blueDeckTiles);
     addTiles(this.scene, this.yellowRailing, redRailings);
     addTiles(this.scene, this.yellowRailing, blueRailings);
+  }
+
+  private buildSwipers() {
+    addSwiper(
+      this.world,
+      this.layers,
+      this.scene,
+      this.entities,
+      this.redSwiperDoubleLong,
+      -9,
+      -36,
+      SWIPER_ANGULAR_SPEED,
+    );
+    addSwiper(
+      this.world,
+      this.layers,
+      this.scene,
+      this.entities,
+      this.blueSwiperDoubleLong,
+      9,
+      36,
+      -SWIPER_ANGULAR_SPEED,
+    );
   }
 }
 
@@ -417,6 +452,60 @@ function addModelInstances(scene: THREE.Scene, source: THREE.Group, placements: 
   }
 }
 
+function addSwiper(
+  world: World,
+  layers: PhysicsLayers,
+  scene: THREE.Scene,
+  entities: PhysicsEntity[],
+  model: THREE.Group,
+  x: number,
+  z: number,
+  targetAngularVelocity: number,
+) {
+  const object = new THREE.Group();
+  const visual = model.clone(true);
+  visual.position.y = -SWIPER_HALF_EXTENTS[1];
+  object.add(visual);
+  object.position.set(x, SWIPER_CENTER_Y, z);
+  scene.add(object);
+
+  const body = rigidBody.create(world, {
+    shape: box.create({ halfExtents: SWIPER_HALF_EXTENTS, convexRadius: 0.05 }),
+    motionType: MotionType.DYNAMIC,
+    objectLayer: layers.kinematic,
+    position: [x, SWIPER_CENTER_Y, z],
+    friction: 0.85,
+    restitution: 0.25,
+    gravityFactor: 0,
+    angularDamping: 0,
+    allowSleeping: false,
+    mass: 25,
+    maxAngularVelocity: 12,
+  });
+  entities.push({ body, object });
+
+  const anchor = rigidBody.create(world, {
+    shape: box.create({ halfExtents: [0.1, 0.1, 0.1] }),
+    motionType: MotionType.STATIC,
+    objectLayer: layers.heldProp,
+    position: [x, SWIPER_CENTER_Y, z],
+  });
+
+  const hinge = hingeConstraint.create(world, {
+    bodyIdA: anchor.id,
+    bodyIdB: body.id,
+    pointA: [x, SWIPER_CENTER_Y, z],
+    pointB: [x, SWIPER_CENTER_Y, z],
+    hingeAxisA: [0, 1, 0],
+    hingeAxisB: [0, 1, 0],
+    normalAxisA: [1, 0, 0],
+    normalAxisB: [1, 0, 0],
+    space: ConstraintSpace.WORLD,
+  });
+  hingeConstraint.setMotorState(hinge, MotorState.VELOCITY);
+  hingeConstraint.setTargetAngularVelocity(hinge, targetAngularVelocity);
+}
+
 function addTiles(scene: THREE.Scene, mesh: GltfMesh, tiles: TileTransform[]) {
   if (tiles.length === 0) {
     return;
@@ -451,7 +540,7 @@ function yawQuat(yaw: number): Quat {
 function addLighting(scene: THREE.Scene) {
   scene.add(new THREE.HemisphereLight(0x8899cc, 0x221133, 2.0));
 
-  const sun = new THREE.DirectionalLight(0xffff00, 1.5);
+  const sun = new THREE.DirectionalLight(0xffffcc, 1.5);
   sun.name = "Sun shadow";
   sun.position.set(24, 32, 22);
   sun.castShadow = true;

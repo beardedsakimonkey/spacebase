@@ -20,7 +20,7 @@ import * as THREE from "three";
 import type { MovementInput } from "./input";
 import { characterAnimationAsset, characterMannequinAsset } from "./assets";
 import { getConveyorVelocity } from "./Conveyor";
-import { remapMannequinBodyColor, type MannequinBodyColor } from "./mannequin";
+import { remapMannequinBodyColor, type MannequinBodyColor } from "./util/mannequin";
 import { PlayerAnimator } from "./PlayerAnimator";
 import { loadGltf } from "./util/kaykit";
 import type { PhysicsLayers } from "./physics";

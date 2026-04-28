@@ -35,11 +35,19 @@ type BarrierPlacement = TileTransform & {
 const PLATFORM_HEIGHT = 4;
 const PLATFORM_HALF_EXTENT = 3;
 const BARRIER_HALF_THICKNESS = 0.5;
+const RAILING_HALF_LENGTH = 1;
+const RAILING_HALF_THICKNESS = 0.2;
+const RAILING_COLLIDER_HEIGHT = 1.2;
+const RAILING_LOCAL_CENTER_Z = -0.8;
 const FLOOR_TOP = 0;
 const SECOND_STORY_TOP = 4;
 const BASE_XS = [-18, -12, -6, 0, 6, 12, 18];
 const RED_BASE_ZS = [24, 30, 36, 42];
 const BLUE_BASE_ZS = [-24, -30, -36, -42];
+const RED_DECK_RAILING_XS = [-14, -12, -10, -8, -6, -4];
+const BLUE_DECK_RAILING_XS = [4, 6, 8, 10, 12, 14];
+const RED_DECK_RAILING_ZS = [32, 34, 36, 38, 40, 42];
+const BLUE_DECK_RAILING_ZS = [-32, -34, -36, -38, -40, -42];
 const CORRIDOR_ZS = [-18, -12, -6, 0, 6, 12, 18];
 const RIGHT_BELT_X = PLATFORM_HALF_EXTENT + CONVEYOR_HALF_X;
 const LEFT_BELT_X = -RIGHT_BELT_X;
@@ -69,8 +77,7 @@ export class Arena {
   private redPlatform6x6x4!: GltfMesh;
   private blueBarrierTall!: GltfMesh;
   private redBarrierTall!: GltfMesh;
-  private blueBarrierLow!: GltfMesh;
-  private redBarrierLow!: GltfMesh;
+  private yellowRailing!: GltfMesh;
   private blueConveyorLong!: THREE.Group;
   private redConveyorLong!: THREE.Group;
   private blueRamp!: THREE.Group;
@@ -108,8 +115,7 @@ export class Arena {
       platform6x6x4Red,
       barrierTallBlue,
       barrierTallRed,
-      barrierLowBlue,
-      barrierLowRed,
+      railingYellow,
       conveyorLongBlue,
       conveyorLongRed,
       rampBlue,
@@ -119,8 +125,7 @@ export class Arena {
       loadGltfMesh(platformerAsset("red", "platform_6x6x4")),
       loadGltfMesh(platformerAsset("blue", "barrier_4x1x4")),
       loadGltfMesh(platformerAsset("red", "barrier_4x1x4")),
-      loadGltfMesh(platformerAsset("blue", "barrier_4x1x2")),
-      loadGltfMesh(platformerAsset("red", "barrier_4x1x2")),
+      loadGltfMesh(platformerAsset("yellow", "railing_straight_double")),
       loadConveyorModel(platformerAsset("blue", "conveyor_4x8x1")),
       loadConveyorModel(platformerAsset("red", "conveyor_4x8x1")),
       loadModel(platformerAsset("blue", "platform_slope_4x6x4")),
@@ -131,8 +136,7 @@ export class Arena {
     this.redPlatform6x6x4 = platform6x6x4Red;
     this.blueBarrierTall = barrierTallBlue;
     this.redBarrierTall = barrierTallRed;
-    this.blueBarrierLow = barrierLowBlue;
-    this.redBarrierLow = barrierLowRed;
+    this.yellowRailing = railingYellow;
     this.blueConveyorLong = conveyorLongBlue.model;
     this.redConveyorLong = conveyorLongRed.model;
     this.blueRamp = rampBlue;
@@ -249,8 +253,8 @@ export class Arena {
   private buildRaisedDecks() {
     const blueDeckTiles: TileTransform[] = [];
     const redDeckTiles: TileTransform[] = [];
-    const blueLowBarriers: BarrierPlacement[] = [];
-    const redLowBarriers: BarrierPlacement[] = [];
+    const blueRailings: TileTransform[] = [];
+    const redRailings: TileTransform[] = [];
 
     for (const x of [-12, -6]) {
       for (const z of [34, 40]) {
@@ -266,26 +270,26 @@ export class Arena {
     addRamp(this.world, this.layers, this.scene, this.redRamp, -9, 28, Math.PI);
     addRamp(this.world, this.layers, this.scene, this.blueRamp, 9, -28, 0);
 
-    for (const x of [-13, -9, -5]) {
-      addBarrier(this.world, this.layers, redLowBarriers, x, SECOND_STORY_TOP, 43.5, 0, 2);
+    for (const x of RED_DECK_RAILING_XS) {
+      addRailing(this.world, this.layers, redRailings, x, SECOND_STORY_TOP, 43.5, 0);
     }
-    for (const z of [35, 39]) {
-      addBarrier(this.world, this.layers, redLowBarriers, -15.5, SECOND_STORY_TOP, z, Math.PI / 2, 2);
-      addBarrier(this.world, this.layers, redLowBarriers, -2.5, SECOND_STORY_TOP, z, Math.PI / 2, 2);
+    for (const z of RED_DECK_RAILING_ZS) {
+      addRailing(this.world, this.layers, redRailings, -15.5, SECOND_STORY_TOP, z, Math.PI / 2);
+      addRailing(this.world, this.layers, redRailings, -2.5, SECOND_STORY_TOP, z, Math.PI / 2);
     }
 
-    for (const x of [5, 9, 13]) {
-      addBarrier(this.world, this.layers, blueLowBarriers, x, SECOND_STORY_TOP, -43.5, 0, 2);
+    for (const x of BLUE_DECK_RAILING_XS) {
+      addRailing(this.world, this.layers, blueRailings, x, SECOND_STORY_TOP, -43.5, 0);
     }
-    for (const z of [-35, -39]) {
-      addBarrier(this.world, this.layers, blueLowBarriers, 15.5, SECOND_STORY_TOP, z, Math.PI / 2, 2);
-      addBarrier(this.world, this.layers, blueLowBarriers, 2.5, SECOND_STORY_TOP, z, Math.PI / 2, 2);
+    for (const z of BLUE_DECK_RAILING_ZS) {
+      addRailing(this.world, this.layers, blueRailings, 15.5, SECOND_STORY_TOP, z, Math.PI / 2);
+      addRailing(this.world, this.layers, blueRailings, 2.5, SECOND_STORY_TOP, z, Math.PI / 2);
     }
 
     addTiles(this.scene, this.redPlatform6x6x4, redDeckTiles);
     addTiles(this.scene, this.bluePlatform6x6x4, blueDeckTiles);
-    addTiles(this.scene, this.redBarrierLow, redLowBarriers);
-    addTiles(this.scene, this.blueBarrierLow, blueLowBarriers);
+    addTiles(this.scene, this.yellowRailing, redRailings);
+    addTiles(this.scene, this.yellowRailing, blueRailings);
   }
 }
 
@@ -352,6 +356,26 @@ function addBarrier(
     quaternion: yawQuat(ry),
     friction: 0.75,
     restitution: 0.35,
+  });
+}
+
+function addRailing(
+  world: World,
+  layers: PhysicsLayers,
+  tiles: TileTransform[],
+  x: number,
+  y: number,
+  z: number,
+  ry: number,
+) {
+  const visualX = x - Math.sin(ry) * RAILING_LOCAL_CENTER_Z;
+  const visualZ = z - Math.cos(ry) * RAILING_LOCAL_CENTER_Z;
+  tiles.push({ x: visualX, y, z: visualZ, ry });
+
+  staticBox(world, layers.terrain, [RAILING_HALF_LENGTH, RAILING_COLLIDER_HEIGHT / 2, RAILING_HALF_THICKNESS], [x, y + RAILING_COLLIDER_HEIGHT / 2, z], {
+    quaternion: yawQuat(ry),
+    friction: 0.75,
+    restitution: 0.25,
   });
 }
 

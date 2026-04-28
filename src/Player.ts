@@ -24,36 +24,6 @@ import { PlayerAnimator } from "./PlayerAnimator";
 import { loadGltf } from "./util/kaykit";
 import type { PhysicsLayers } from "./physics";
 
-type PlayerTuning = {
-  capsuleRadius: number;
-  capsuleHalfHeight: number;
-  maxRunSpeed: number;
-  accelerationTime: number;
-  turnSpeed: number;
-  airControlFactor: number;
-  dragDampingC: number;
-  moveImpulsePointY: number;
-  playerFriction: number;
-  maxSlopeAngle: number;
-  balanceSpringK: number;
-  balanceDampingC: number;
-  balanceYawSpringK: number;
-  balanceYawDampingC: number;
-  jumpVelocity: number;
-  normalGravityScale: number;
-  fallingGravityScale: number;
-  maxFallSpeed: number;
-  jumpGroundIgnoreTime: number;
-  landingDamping: number;
-  groundedSnapSpeed: number;
-  groundContactTolerance: number;
-  rayHitForgiveness: number;
-  dashImpulse: number;
-  dashUpwardImpulse: number;
-  dashDuration: number;
-  dashCooldown: number;
-};
-
 export type PlayerTelemetry = {
   speed: number;
   grounded: boolean;
@@ -73,6 +43,7 @@ const REVERSAL_TURN_THRESHOLD = Math.PI * 0.82;
 const MIN_SAFE_DURATION = 0.001;
 const MAX_GROUND_CORRECTION_SPEED = 2;
 const RESPAWN_Y = -14;
+const PLAYER_SPAWN_POSITION: Vec3 = [0, 3.5, 0];
 
 const rayCollector = createClosestCastRayCollector();
 const raySettings = createDefaultCastRaySettings();
@@ -101,7 +72,7 @@ function normalizeAngle(angle: number) {
   return angle;
 }
 
-const PLAYER_TUNING: Readonly<PlayerTuning> = {
+const TUNING = {
   capsuleRadius: 0.48,
   capsuleHalfHeight: 0.42,
   maxRunSpeed: 7,
@@ -129,12 +100,11 @@ const PLAYER_TUNING: Readonly<PlayerTuning> = {
   dashUpwardImpulse: 1.9,
   dashDuration: 0.44,
   dashCooldown: 0.7,
-};
+} as const;
 
 export class PlayerController {
   readonly body: RigidBody;
   readonly object: THREE.Group;
-  readonly tuning: Readonly<PlayerTuning>;
 
   private readonly queryFilter: Filter;
   private readonly animator = new PlayerAnimator();
@@ -166,20 +136,19 @@ export class PlayerController {
   private airJumpsRemaining = 0;
   private airDashUsed = false;
 
-  constructor(world: World, layers: PhysicsLayers, scene: THREE.Scene, tuning = PLAYER_TUNING) {
-    this.tuning = tuning;
+  constructor(world: World, layers: PhysicsLayers, scene: THREE.Scene) {
     const shape: Shape = capsule.create({
-      halfHeightOfCylinder: tuning.capsuleHalfHeight,
-      radius: tuning.capsuleRadius,
+      halfHeightOfCylinder: TUNING.capsuleHalfHeight,
+      radius: TUNING.capsuleRadius,
     });
 
     this.body = rigidBody.create(world, {
       shape,
       motionType: MotionType.DYNAMIC,
-      position: [0, 3.5, 0],
+      position: PLAYER_SPAWN_POSITION,
       objectLayer: layers.player,
       // MIN lets player friction cap terrain contact grip instead of inheriting sticky surfaces.
-      friction: tuning.playerFriction,
+      friction: TUNING.playerFriction,
       frictionCombineMode: MaterialCombineMode.MIN,
       restitution: 0.05,
       linearDamping: 0,
@@ -189,7 +158,7 @@ export class PlayerController {
       motionQuality: MotionQuality.LINEAR_CAST,
       allowedDegreesOfFreedom: 0b111111,
     });
-    this.body.motionProperties.gravityFactor = tuning.normalGravityScale;
+    this.body.motionProperties.gravityFactor = TUNING.normalGravityScale;
     this.queryFilter = filter.create(world.settings.layers);
     this.queryFilter.bodyFilter = (body) => body.id !== this.body.id;
     this.object = this.createVisual();
@@ -209,7 +178,7 @@ export class PlayerController {
     this.jumpGroundIgnoreTimer = Math.max(0, this.jumpGroundIgnoreTimer - dt);
     this.input.wantToJump = input.jump;
     vec3.set(this.input.moveDirection, cameraMoveDirection.x, 0, cameraMoveDirection.z);
-    this.body.friction = this.tuning.playerFriction;
+    this.body.friction = TUNING.playerFriction;
 
     this.updateFacingYaw(dt, cameraPosition);
     this.updateGround(world);
@@ -235,7 +204,7 @@ export class PlayerController {
   }
 
   reset(world: World) {
-    rigidBody.setPosition(world, this.body, [0, 3.5, 0], false);
+    rigidBody.setPosition(world, this.body, PLAYER_SPAWN_POSITION, false);
     rigidBody.setLinearVelocity(world, this.body, [0, 0, 0]);
     rigidBody.setAngularVelocity(world, this.body, [0, 0, 0]);
     this.body.quaternion = [0, 0, 0, 1];
@@ -287,8 +256,8 @@ export class PlayerController {
       this.dashDirection[1] = 0;
       this.dashDirection[2] = forward.z;
     }
-    this.dashTimer = this.tuning.dashDuration;
-    this.dashCooldownTimer = this.tuning.dashCooldown;
+    this.dashTimer = TUNING.dashDuration;
+    this.dashCooldownTimer = TUNING.dashCooldown;
     if (!this.isOnGround) {
       this.airDashUsed = true;
     }
@@ -407,7 +376,7 @@ export class PlayerController {
         this.reversalTurnSign = 0;
       }
 
-      const step = Math.max(-this.tuning.turnSpeed * dt, Math.min(this.tuning.turnSpeed * dt, deltaYaw));
+      const step = Math.max(-TUNING.turnSpeed * dt, Math.min(TUNING.turnSpeed * dt, deltaYaw));
       this.facingYaw += step;
       if (Math.abs(step) > 0.0001) {
         this.lastTurnSign = Math.sign(step);
@@ -434,10 +403,10 @@ export class PlayerController {
 
     const position = this.body.position;
     rayOrigin[0] = position[0];
-    rayOrigin[1] = position[1] - this.tuning.capsuleHalfHeight;
+    rayOrigin[1] = position[1] - TUNING.capsuleHalfHeight;
     rayOrigin[2] = position[2];
 
-    const rayLength = this.tuning.capsuleRadius + 2;
+    const rayLength = TUNING.capsuleRadius + 2;
 
     rayCollector.reset();
     castRay(world, rayCollector, raySettings, rayOrigin, [0, -1, 0], rayLength, this.queryFilter);
@@ -446,7 +415,7 @@ export class PlayerController {
       ? rayCollector.hit.fraction * rayLength
       : Infinity;
 
-    if (hitDistance >= this.tuning.capsuleRadius + this.tuning.rayHitForgiveness) {
+    if (hitDistance >= TUNING.capsuleRadius + TUNING.rayHitForgiveness) {
       this.isOnGround = false;
       this.groundBodyId = null;
       this.groundDistance = 0;
@@ -470,7 +439,7 @@ export class PlayerController {
       this.actualSlopeAngle = Math.acos(
         THREE.MathUtils.clamp(vec3.dot(this.actualSlopeNormal, worldUp), -1, 1),
       );
-      this.canJump = this.actualSlopeAngle < this.tuning.maxSlopeAngle;
+      this.canJump = this.actualSlopeAngle < TUNING.maxSlopeAngle;
       if (this.canJump) {
         this.airJumpsRemaining = 1;
         this.airDashUsed = false;
@@ -479,7 +448,7 @@ export class PlayerController {
   }
 
   private applyMovementImpulse(world: World) {
-    const targetSpeed = this.tuning.maxRunSpeed;
+    const targetSpeed = TUNING.maxRunSpeed;
     const currentVelocity = this.body.motionProperties.linearVelocity;
 
     currentHorizontal[0] = currentVelocity[0];
@@ -498,8 +467,8 @@ export class PlayerController {
     deltaVelocity[1] = 0;
     deltaVelocity[2] = desiredHorizontal[2] - currentHorizontal[2];
 
-    const air = this.canJump ? 1 : this.tuning.airControlFactor;
-    const acceleration = 1 / Math.max(MIN_SAFE_DURATION, this.tuning.accelerationTime);
+    const air = this.canJump ? 1 : TUNING.airControlFactor;
+    const acceleration = 1 / Math.max(MIN_SAFE_DURATION, TUNING.accelerationTime);
 
     moveImpulse[0] = deltaVelocity[0] * acceleration * air;
     moveImpulse[1] = 0;
@@ -507,19 +476,19 @@ export class PlayerController {
 
     const position = this.body.position;
     impulsePoint[0] = position[0];
-    impulsePoint[1] = position[1] + this.tuning.moveImpulsePointY;
+    impulsePoint[1] = position[1] + TUNING.moveImpulsePointY;
     impulsePoint[2] = position[2];
     rigidBody.addImpulseAtPosition(world, this.body, moveImpulse, impulsePoint);
   }
 
   private applyDashVelocity(world: World, includeUpwardImpulse = false) {
     const velocity = this.body.motionProperties.linearVelocity;
-    const dashDuration = Math.max(MIN_SAFE_DURATION, this.tuning.dashDuration);
-    const dashSpeed = this.tuning.dashImpulse * Math.max(0, Math.min(1, this.dashTimer / dashDuration));
+    const dashDuration = Math.max(MIN_SAFE_DURATION, TUNING.dashDuration);
+    const dashSpeed = TUNING.dashImpulse * Math.max(0, Math.min(1, this.dashTimer / dashDuration));
 
     // Dash input is locked, so speed decays across the committed dash instead of being re-applied flat.
     dashVelocity[0] = this.dashDirection[0] * dashSpeed;
-    dashVelocity[1] = includeUpwardImpulse ? velocity[1] + this.tuning.dashUpwardImpulse : velocity[1];
+    dashVelocity[1] = includeUpwardImpulse ? velocity[1] + TUNING.dashUpwardImpulse : velocity[1];
     dashVelocity[2] = this.dashDirection[2] * dashSpeed;
     rigidBody.setLinearVelocity(world, this.body, dashVelocity);
   }
@@ -530,7 +499,7 @@ export class PlayerController {
       // Landing should settle into contact instead of rebounding from downward velocity.
       rigidBody.setLinearVelocity(world, this.body, [
         velocity[0],
-        velocity[1] * this.tuning.landingDamping,
+        velocity[1] * TUNING.landingDamping,
         velocity[2],
       ]);
     }
@@ -541,9 +510,9 @@ export class PlayerController {
       return;
     }
     const velocity = this.body.motionProperties.linearVelocity;
-    dragImpulse[0] = -(velocity[0] - this.groundSurfaceVelocity[0]) * this.tuning.dragDampingC;
+    dragImpulse[0] = -(velocity[0] - this.groundSurfaceVelocity[0]) * TUNING.dragDampingC;
     dragImpulse[1] = 0;
-    dragImpulse[2] = -(velocity[2] - this.groundSurfaceVelocity[2]) * this.tuning.dragDampingC;
+    dragImpulse[2] = -(velocity[2] - this.groundSurfaceVelocity[2]) * TUNING.dragDampingC;
     rigidBody.addImpulse(world, this.body, dragImpulse);
   }
 
@@ -553,12 +522,12 @@ export class PlayerController {
     }
 
     const velocity = this.body.motionProperties.linearVelocity;
-    const contactError = this.tuning.capsuleRadius - this.groundDistance;
-    if (contactError <= this.tuning.groundContactTolerance) {
+    const contactError = TUNING.capsuleRadius - this.groundDistance;
+    if (contactError <= TUNING.groundContactTolerance) {
       return;
     }
 
-    const correctionVelocity = Math.min(contactError * this.tuning.groundedSnapSpeed, MAX_GROUND_CORRECTION_SPEED);
+    const correctionVelocity = Math.min(contactError * TUNING.groundedSnapSpeed, MAX_GROUND_CORRECTION_SPEED);
     if (velocity[1] >= correctionVelocity) {
       return;
     }
@@ -590,9 +559,9 @@ export class PlayerController {
     vec3.cross(yawCorrection, bodyForward, desiredForward);
 
     const angularVelocity = this.body.motionProperties.angularVelocity;
-    balanceTorque[0] = upCorrection[0] * this.tuning.balanceSpringK - angularVelocity[0] * this.tuning.balanceDampingC;
-    balanceTorque[1] = yawCorrection[1] * this.tuning.balanceYawSpringK - angularVelocity[1] * this.tuning.balanceYawDampingC;
-    balanceTorque[2] = upCorrection[2] * this.tuning.balanceSpringK - angularVelocity[2] * this.tuning.balanceDampingC;
+    balanceTorque[0] = upCorrection[0] * TUNING.balanceSpringK - angularVelocity[0] * TUNING.balanceDampingC;
+    balanceTorque[1] = yawCorrection[1] * TUNING.balanceYawSpringK - angularVelocity[1] * TUNING.balanceYawDampingC;
+    balanceTorque[2] = upCorrection[2] * TUNING.balanceSpringK - angularVelocity[2] * TUNING.balanceDampingC;
 
     rigidBody.addAngularImpulse(world, this.body, balanceTorque);
   }
@@ -611,20 +580,20 @@ export class PlayerController {
     }
 
     const velocity = this.body.motionProperties.linearVelocity;
-    rigidBody.setLinearVelocity(world, this.body, [velocity[0], this.tuning.jumpVelocity, velocity[2]]);
-    this.jumpGroundIgnoreTimer = this.tuning.jumpGroundIgnoreTime;
+    rigidBody.setLinearVelocity(world, this.body, [velocity[0], TUNING.jumpVelocity, velocity[2]]);
+    this.jumpGroundIgnoreTimer = TUNING.jumpGroundIgnoreTime;
     this.canJump = false;
     this.animator.startJump();
   }
 
   private updateGravityScale() {
     const verticalVelocity = this.body.motionProperties.linearVelocity[1];
-    if (verticalVelocity < -this.tuning.maxFallSpeed) {
+    if (verticalVelocity < -TUNING.maxFallSpeed) {
       this.body.motionProperties.gravityFactor = 0;
     } else if (verticalVelocity < 0 && !this.canJump) {
-      this.body.motionProperties.gravityFactor = this.tuning.fallingGravityScale;
+      this.body.motionProperties.gravityFactor = TUNING.fallingGravityScale;
     } else {
-      this.body.motionProperties.gravityFactor = this.tuning.normalGravityScale;
+      this.body.motionProperties.gravityFactor = TUNING.normalGravityScale;
     }
   }
 

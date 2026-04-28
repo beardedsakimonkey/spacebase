@@ -422,7 +422,7 @@ function yawQuat(yaw: number): Quat {
 function addLighting(scene: THREE.Scene) {
   scene.add(new THREE.HemisphereLight(0x8899cc, 0x221133, 2.0));
 
-  const sun = new THREE.DirectionalLight(0x00ffff, 1.5);
+  const sun = new THREE.DirectionalLight(0xffff00, 1.5);
   sun.position.set(24, 32, 22);
   sun.castShadow = true;
   sun.shadow.mapSize.setScalar(4096);

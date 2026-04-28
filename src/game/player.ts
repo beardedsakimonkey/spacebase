@@ -32,13 +32,11 @@ type PlayerTuning = {
   moveImpulsePointY: number;
   playerFriction: number;
   maxSlopeAngle: number;
-  enableAutoBalance: boolean;
   balanceSpringK: number;
   balanceDampingC: number;
   balanceYawSpringK: number;
   balanceYawDampingC: number;
   jumpVelocity: number;
-  airJumpCount: number;
   normalGravityScale: number;
   fallingGravityScale: number;
   maxFallSpeed: number;
@@ -105,7 +103,7 @@ function normalizeAngle(angle: number) {
 const PLAYER_TUNING: Readonly<PlayerTuning> = {
   capsuleRadius: 0.48,
   capsuleHalfHeight: 0.42,
-  maxRunSpeed: 6,
+  maxRunSpeed: 7,
   accelerationTime: 7.5,
   turnSpeed: 9,
   airControlFactor: 0.22,
@@ -113,13 +111,11 @@ const PLAYER_TUNING: Readonly<PlayerTuning> = {
   moveImpulsePointY: 0.42,
   playerFriction: 0.35,
   maxSlopeAngle: 0.95,
-  enableAutoBalance: true,
   balanceSpringK: 0.42,
   balanceDampingC: 0.16,
   balanceYawSpringK: 0.38,
   balanceYawDampingC: 0.08,
   jumpVelocity: 6.8,
-  airJumpCount: 1,
   normalGravityScale: 1,
   fallingGravityScale: 2.35,
   maxFallSpeed: 22,
@@ -185,7 +181,6 @@ export class PlayerController {
   private isOnGround = false;
   private canJump = false;
   private wasOnGround = false;
-  private isFalling = false;
   private actualSlopeNormal: Vec3 = vec3.fromValues(0, 1, 0);
   private actualSlopeAngle = 0;
   private groundBodyId: number | null = null;
@@ -225,7 +220,7 @@ export class PlayerController {
       mass: 1,
       // Dash speeds can cross thin walls in one tick; linear CCD sweeps the capsule along its motion.
       motionQuality: MotionQuality.LINEAR_CAST,
-      allowedDegreesOfFreedom: tuning.enableAutoBalance ? 0b111111 : 0b111000,
+      allowedDegreesOfFreedom: 0b111111,
     });
     this.body.motionProperties.gravityFactor = tuning.normalGravityScale;
     this.queryFilter = filter.create(world.settings.layers);
@@ -252,9 +247,8 @@ export class PlayerController {
     this.body.friction = this.tuning.playerFriction;
 
     this.updateModelYaw(dt, cameraPosition);
-    this.updateGroundDetection(world);
+    this.updateGround(world);
     this.applyLandingDamping(world);
-    this.updateGroundSurface(world);
 
     if (this.dashTimer > 0) {
       this.applyDashVelocity(world);
@@ -339,10 +333,6 @@ export class PlayerController {
     return out.set(velocity[0], velocity[1], velocity[2]);
   }
 
-  private getMaxAirJumps() {
-    return Math.max(0, Math.floor(this.tuning.airJumpCount));
-  }
-
   private canUseJump() {
     return this.canJump || (!this.isOnGround && this.airJumpsRemaining > 0);
   }
@@ -369,9 +359,9 @@ export class PlayerController {
 
   private async loadVisualModel(group: THREE.Group) {
     const [modelGltf, generalGltf, movementGltf] = await Promise.all([
-      loadGltf("/assets/kaykit/Mannequin_Medium.glb"),
-      loadGltf("/assets/kaykit/Rig_Medium_General.glb"),
-      loadGltf("/assets/kaykit/Rig_Medium_MovementBasic.glb"),
+      loadGltf("/assets/KayKit_Character_Animations_1.1/Mannequin Character/characters/Mannequin_Medium.glb"),
+      loadGltf("/assets/KayKit_Character_Animations_1.1/Animations/gltf/Rig_Medium/Rig_Medium_General.glb"),
+      loadGltf("/assets/KayKit_Character_Animations_1.1/Animations/gltf/Rig_Medium/Rig_Medium_MovementBasic.glb"),
     ]);
 
     const model = modelGltf.scene;
@@ -387,7 +377,7 @@ export class PlayerController {
 
     this.animationMixer = new THREE.AnimationMixer(model);
     this.bindAnimation("idle", model, generalGltf.animations, "Idle_A");
-    this.bindAnimation("run", model, movementGltf.animations, "Running_A");
+    this.bindAnimation("run", model, movementGltf.animations, "Running_B");
     this.bindAnimation("jumpStart", model, movementGltf.animations, "Jump_Start", true);
     this.bindAnimation("jumpIdle", model, movementGltf.animations, "Jump_Idle");
     this.bindAnimation("jumpLand", model, movementGltf.animations, "Jump_Land", true);
@@ -540,14 +530,16 @@ export class PlayerController {
     }
   }
 
-  private updateGroundDetection(world: World) {
+  private updateGround(world: World) {
+    this.actualSlopeNormal = [0, 1, 0];
+    this.actualSlopeAngle = 0;
+    this.canJump = false;
+
     if (this.jumpGroundIgnoreTimer > 0) {
       // Fresh jumps ignore nearby ground so grounded snap cannot pull the player back down.
       this.isOnGround = false;
-      this.canJump = false;
       this.groundBodyId = null;
       this.groundDistance = 0;
-      this.actualSlopeAngle = 0;
       return;
     }
 
@@ -557,57 +549,40 @@ export class PlayerController {
     rayOrigin[2] = position[2];
 
     const rayLength = this.tuning.capsuleRadius + 2;
-    const groundedDistance = this.tuning.capsuleRadius;
 
     setIgnoreSingleBodyFilter(this.queryFilter, this.body.id);
     rayCollector.reset();
     castRay(world, rayCollector, raySettings, rayOrigin, [0, -1, 0], rayLength, this.queryFilter);
     resetIgnoreSingleBodyFilter(this.queryFilter);
 
-    if (rayCollector.hit.status === CastRayStatus.COLLIDING) {
-      const hitDistance = rayCollector.hit.fraction * rayLength;
-      if (hitDistance < groundedDistance + this.tuning.rayHitForgiveness) {
-        this.isOnGround = true;
-        this.groundDistance = hitDistance;
-        this.groundPosition = [rayOrigin[0], rayOrigin[1] - hitDistance, rayOrigin[2]];
-        this.groundBodyId = rayCollector.hit.bodyIdB;
-        this.groundSubShapeId = rayCollector.hit.subShapeId;
-        return;
-      }
-    }
+    const hitDistance = rayCollector.hit.status === CastRayStatus.COLLIDING
+      ? rayCollector.hit.fraction * rayLength
+      : Infinity;
 
-    this.isOnGround = false;
-    this.canJump = false;
-    this.groundBodyId = null;
-    this.groundDistance = 0;
-    this.actualSlopeAngle = 0;
-  }
-
-  private updateGroundSurface(world: World) {
-    if (!this.isOnGround) {
-      this.actualSlopeNormal = [0, 1, 0];
-      this.actualSlopeAngle = 0;
-      this.canJump = false;
+    if (hitDistance >= this.tuning.capsuleRadius + this.tuning.rayHitForgiveness) {
+      this.isOnGround = false;
+      this.groundBodyId = null;
+      this.groundDistance = 0;
       return;
     }
 
-    this.actualSlopeNormal = [0, 1, 0];
-    this.actualSlopeAngle = 0;
-    this.canJump = false;
+    this.isOnGround = true;
+    this.groundDistance = hitDistance;
+    this.groundPosition = [rayOrigin[0], rayOrigin[1] - hitDistance, rayOrigin[2]];
+    this.groundBodyId = rayCollector.hit.bodyIdB;
+    this.groundSubShapeId = rayCollector.hit.subShapeId;
 
-    if (this.groundBodyId !== null) {
-      // Ground state comes only from center contact; forward probes made ledges feel sticky.
-      const groundBody = rigidBody.get(world, this.groundBodyId);
-      if (groundBody) {
-        rigidBody.getSurfaceNormal(this.actualSlopeNormal, groundBody, this.groundPosition, this.groundSubShapeId);
-        this.actualSlopeAngle = Math.acos(
-          Math.max(-1, Math.min(1, vec3.dot(this.actualSlopeNormal, [0, 1, 0] as Vec3))),
-        );
-        this.canJump = this.actualSlopeAngle < this.tuning.maxSlopeAngle;
-        if (this.canJump) {
-          this.airJumpsRemaining = this.getMaxAirJumps();
-          this.airDashUsed = false;
-        }
+    // Ground state comes only from center contact; forward probes made ledges feel sticky.
+    const groundBody = rigidBody.get(world, this.groundBodyId);
+    if (groundBody) {
+      rigidBody.getSurfaceNormal(this.actualSlopeNormal, groundBody, this.groundPosition, this.groundSubShapeId);
+      this.actualSlopeAngle = Math.acos(
+        Math.max(-1, Math.min(1, vec3.dot(this.actualSlopeNormal, [0, 1, 0] as Vec3))),
+      );
+      this.canJump = this.actualSlopeAngle < this.tuning.maxSlopeAngle;
+      if (this.canJump) {
+        this.airJumpsRemaining = 1;
+        this.airDashUsed = false;
       }
     }
   }
@@ -702,10 +677,6 @@ export class PlayerController {
   }
 
   private applyAutoBalanceImpulse(world: World) {
-    if (!this.tuning.enableAutoBalance) {
-      return;
-    }
-
     const bodyRotation = this.body.quaternion;
     vec3.set(bodyUp, 0, 1, 0);
     vec3.transformQuat(bodyUp, bodyUp, bodyRotation);
@@ -754,11 +725,9 @@ export class PlayerController {
 
   private updateGravityScale() {
     const verticalVelocity = this.body.motionProperties.linearVelocity[1];
-    this.isFalling = verticalVelocity < 0 && !this.canJump;
-
     if (verticalVelocity < -this.tuning.maxFallSpeed) {
       this.body.motionProperties.gravityFactor = 0;
-    } else if (this.isFalling) {
+    } else if (verticalVelocity < 0 && !this.canJump) {
       this.body.motionProperties.gravityFactor = this.tuning.fallingGravityScale;
     } else {
       this.body.motionProperties.gravityFactor = this.tuning.normalGravityScale;

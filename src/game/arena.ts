@@ -108,11 +108,11 @@ async function loadArenaAssets(): Promise<ArenaAssets> {
     barrierTall,
     barrierLow,
   ] = await Promise.all([
-    loadGltfMesh("/assets/kaykit/platform_6x6x4_yellow.gltf"),
-    loadGltfMesh("/assets/kaykit/platform_6x6x4_blue.gltf"),
-    loadGltfMesh("/assets/kaykit/platform_6x6x4_red.gltf"),
-    loadGltfMesh("/assets/kaykit/barrier_4x1x4_red.gltf"),
-    loadGltfMesh("/assets/kaykit/barrier_4x1x2_red.gltf"),
+    loadGltfMesh("/assets/KayKit_Platformer_Pack_1.0_SOURCE/Assets/gltf/yellow/platform_6x6x4_yellow.gltf"),
+    loadGltfMesh("/assets/KayKit_Platformer_Pack_1.0_SOURCE/Assets/gltf/blue/platform_6x6x4_blue.gltf"),
+    loadGltfMesh("/assets/KayKit_Platformer_Pack_1.0_SOURCE/Assets/gltf/red/platform_6x6x4_red.gltf"),
+    loadGltfMesh("/assets/KayKit_Platformer_Pack_1.0_SOURCE/Assets/gltf/red/barrier_4x1x4_red.gltf"),
+    loadGltfMesh("/assets/KayKit_Platformer_Pack_1.0_SOURCE/Assets/gltf/red/barrier_4x1x2_red.gltf"),
   ]);
 
   return {

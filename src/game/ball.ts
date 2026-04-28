@@ -71,7 +71,7 @@ export class BallController {
     this.object = new THREE.Group();
     scene.add(this.object);
 
-    loadGltfScene("/assets/kaykit/ball.gltf").then((model) => {
+    loadGltfScene("/assets/KayKit_Platformer_Pack_1.0_SOURCE/Assets/gltf/neutral/ball.gltf").then((model) => {
       // KayKit ball is radius 1; scale to match physics radius 0.52
       model.scale.setScalar(0.52);
       model.traverse((node) => {

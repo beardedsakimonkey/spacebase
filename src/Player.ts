@@ -38,7 +38,7 @@ type PlayerInputState = {
 
 const PLAYER_MODEL_SCALE = 0.82;
 const PLAYER_MODEL_OFFSET_Y = -0.9;
-const PLAYER_BODY_COLOR: MannequinBodyColor = "green";
+const PLAYER_BODY_COLOR: MannequinBodyColor = "yellow";
 const MOVE_INPUT_EPSILON = 0.001;
 const TURN_TARGET_EPSILON = 0.08;
 const REVERSAL_TURN_THRESHOLD = Math.PI * 0.82;

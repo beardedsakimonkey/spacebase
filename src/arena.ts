@@ -413,7 +413,7 @@ function yawQuat(yaw: number): Quat {
 }
 
 function addLighting(scene: THREE.Scene) {
-  scene.add(new THREE.HemisphereLight(0xdaf4ff, 0x564b8a, 2.0));
+  scene.add(new THREE.HemisphereLight(0x8899cc, 0x221133, 2.0));
 
   const sun = new THREE.DirectionalLight(0xffffff, 1.5);
   sun.position.set(24, 32, 22);
@@ -429,14 +429,24 @@ function addLighting(scene: THREE.Scene) {
 }
 
 function addSky(scene: THREE.Scene) {
-  scene.background = new THREE.Color(0x60cfff);
-  scene.fog = new THREE.Fog(0x60cfff, 90, 180);
+  scene.background = new THREE.Color(0x05050f);
+  scene.fog = new THREE.Fog(0x05050f, 90, 200);
 
-  const rim = new THREE.Mesh(
-    new THREE.TorusGeometry(72, 0.16, 8, 192),
-    new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.28 }),
-  );
-  rim.position.set(0, 10, 0);
-  rim.rotation.x = Math.PI / 2;
-  scene.add(rim);
+  const COUNT = 4000;
+  const positions = new Float32Array(COUNT * 3);
+  for (let i = 0; i < COUNT; i++) {
+    // uniform distribution on a sphere shell
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.acos(2 * Math.random() - 1);
+    const r = 350 + Math.random() * 100;
+    positions[i * 3]     = r * Math.sin(phi) * Math.cos(theta);
+    positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+    positions[i * 3 + 2] = r * Math.cos(phi);
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+
+  const mat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.6, sizeAttenuation: true, fog: false });
+  scene.add(new THREE.Points(geo, mat));
 }

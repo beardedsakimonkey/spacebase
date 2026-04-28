@@ -16,7 +16,7 @@ export class FollowCamera {
   private readonly desired = new THREE.Vector3();
 
   constructor(aspect: number) {
-    this.camera = new THREE.PerspectiveCamera(48, aspect, 0.1, 180);
+    this.camera = new THREE.PerspectiveCamera(48, aspect, 0.1, 600);
   }
 
   resize(aspect: number) {

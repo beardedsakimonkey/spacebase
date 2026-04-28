@@ -37,7 +37,7 @@ const SECOND_STORY_TOP = 4;
 const BASE_XS = [-18, -12, -6, 0, 6, 12, 18];
 const RED_BASE_ZS = [24, 30, 36, 42];
 const BLUE_BASE_ZS = [-24, -30, -36, -42];
-const CORRIDOR_ZS = [-14, -10, -6, -2, 2, 6, 10, 14];
+const CORRIDOR_ZS = [-18, -14, -10, -6, -2, 2, 6, 10, 14, 18];
 const LEFT_BELT_X = -5.1;
 const RIGHT_BELT_X = 5.1;
 const Y_AXIS: Vec3 = [0, 1, 0];
@@ -187,7 +187,7 @@ export class Arena {
     ];
 
     for (const lane of beltLanes) {
-      for (const z of [-16, -8]) {
+      for (const z of [0, -16, -8]) {
         addConveyorSegment(
           this.world,
           this.layers,
@@ -201,7 +201,7 @@ export class Arena {
         );
       }
 
-      for (const z of [8, 16]) {
+      for (const z of [8, 16, 0]) {
         addConveyorSegment(
           this.world,
           this.layers,

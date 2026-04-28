@@ -14,12 +14,12 @@ export class DevHud {
 
   constructor() {
     this.root.className = "hud";
-    this.root.setAttribute("aria-expanded", "true");
+    this.root.setAttribute("aria-expanded", "false");
 
     const header = document.createElement("button");
     header.className = "hud-header";
     header.type = "button";
-    header.innerHTML = "<span>Dev HUD</span><span>collapse</span>";
+    header.innerHTML = "<span>Dev HUD</span><span>expand</span>";
     header.addEventListener("click", () => {
       const expanded = this.root.getAttribute("aria-expanded") !== "false";
       this.root.setAttribute("aria-expanded", expanded ? "false" : "true");

@@ -152,6 +152,7 @@ renderer.domElement.focus();
 
       if (pendingChargedThrow) {
         ball.throw(physics.world, player, throwDirection, throwChargePower);
+        player.startThrowAnimation();
         throwCharging = false;
         throwChargePower = 0;
         pendingChargedThrow = false;

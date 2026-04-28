@@ -71,8 +71,6 @@ export class Arena {
   private redConveyorLong!: THREE.Group;
   private blueRamp!: THREE.Group;
   private redRamp!: THREE.Group;
-  private blueFlag!: THREE.Group;
-  private redFlag!: THREE.Group;
   private conveyorTextures: THREE.Texture[] = [];
 
   private constructor(
@@ -92,7 +90,6 @@ export class Arena {
     arena.buildConveyors();
     arena.buildBoundaryWalls();
     arena.buildRaisedDecks();
-    arena.buildBaseDecor();
 
     return arena;
   }
@@ -115,8 +112,6 @@ export class Arena {
       conveyorLongRed,
       rampBlue,
       rampRed,
-      flagBlue,
-      flagRed,
     ] = await Promise.all([
       loadGltfMesh(platformerAsset("blue", "platform_4x4x4")),
       loadGltfMesh(platformerAsset("red", "platform_4x4x4")),
@@ -130,8 +125,6 @@ export class Arena {
       loadConveyorModel(platformerAsset("red", "conveyor_4x8x1")),
       loadModel(platformerAsset("blue", "platform_slope_4x6x4")),
       loadModel(platformerAsset("red", "platform_slope_4x6x4")),
-      loadModel(platformerAsset("blue", "flag_C")),
-      loadModel(platformerAsset("red", "flag_C")),
     ]);
 
     this.bluePlatform4x4x4 = platform4x4x4Blue;
@@ -146,8 +139,6 @@ export class Arena {
     this.redConveyorLong = conveyorLongRed.model;
     this.blueRamp = rampBlue;
     this.redRamp = rampRed;
-    this.blueFlag = flagBlue;
-    this.redFlag = flagRed;
     this.conveyorTextures = [
       ...conveyorLongBlue.textures,
       ...conveyorLongRed.textures,
@@ -295,11 +286,6 @@ export class Arena {
     addTiles(this.scene, this.bluePlatform6x6x4, blueDeckTiles);
     addTiles(this.scene, this.redBarrierLow, redLowBarriers);
     addTiles(this.scene, this.blueBarrierLow, blueLowBarriers);
-  }
-
-  private buildBaseDecor() {
-    addModelInstances(this.scene, this.redFlag, [{ x: 0, y: 0, z: 39, ry: Math.PI * 1.5 }]);
-    addModelInstances(this.scene, this.blueFlag, [{ x: 0, y: 0, z: -39, ry: Math.PI / 2 }]);
   }
 }
 

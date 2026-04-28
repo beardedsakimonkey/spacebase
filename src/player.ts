@@ -64,13 +64,15 @@ type PlayerInputState = {
   wantToJump: boolean;
 };
 
-type PlayerAnimationName = "idle" | "run" | "jumpStart" | "jumpIdle" | "jumpLand";
+type PlayerAnimationName = "idle" | "run" | "jumpStart" | "jumpIdle" | "jumpLand" | "throw" | "dash";
 
 const PLAYER_MODEL_SCALE = 0.82;
 const PLAYER_MODEL_OFFSET_Y = -0.9;
 const ANIMATION_FADE_SECONDS = 0.12;
 const JUMP_START_ANIMATION_SECONDS = 0.28;
 const LAND_ANIMATION_SECONDS = 0.24;
+const THROW_ANIMATION_SECONDS = 1.37;
+const DASH_ANIMATION_SECONDS = 0.40;
 
 const rayCollector = createClosestCastRayCollector();
 const raySettings = createDefaultCastRaySettings();
@@ -201,6 +203,8 @@ export class PlayerController {
   private activeAnimation: PlayerAnimationName | null = null;
   private jumpStartAnimationTimer = 0;
   private landAnimationTimer = 0;
+  private throwAnimationTimer = 0;
+  private dashAnimationTimer = 0;
 
   constructor(world: World, layers: PhysicsLayers, scene: THREE.Scene, tuning = PLAYER_TUNING) {
     this.tuning = tuning;
@@ -294,7 +298,16 @@ export class PlayerController {
     this.airDashUsed = false;
     this.jumpStartAnimationTimer = 0;
     this.landAnimationTimer = 0;
+    this.throwAnimationTimer = 0;
+    this.dashAnimationTimer = 0;
     this.playAnimation("idle", 0.05);
+  }
+
+  startThrowAnimation() {
+    this.throwAnimationTimer = THROW_ANIMATION_SECONDS;
+    this.dashAnimationTimer = 0;
+    this.jumpStartAnimationTimer = 0;
+    this.landAnimationTimer = 0;
   }
 
   dash(world: World) {
@@ -318,6 +331,10 @@ export class PlayerController {
     if (!this.isOnGround) {
       this.airDashUsed = true;
     }
+    this.dashAnimationTimer = DASH_ANIMATION_SECONDS;
+    this.throwAnimationTimer = 0;
+    this.jumpStartAnimationTimer = 0;
+    this.landAnimationTimer = 0;
     this.applyDashVelocity(world, true);
     return true;
   }
@@ -361,10 +378,11 @@ export class PlayerController {
   }
 
   private async loadVisualModel(group: THREE.Group) {
-    const [modelGltf, generalGltf, movementGltf] = await Promise.all([
+    const [modelGltf, generalGltf, movementGltf, movementAdvancedGltf] = await Promise.all([
       loadGltf(characterMannequinAsset("medium")),
       loadGltf(characterAnimationAsset("medium", "general")),
       loadGltf(characterAnimationAsset("medium", "movement_basic")),
+      loadGltf(characterAnimationAsset("medium", "movement_advanced")),
     ]);
 
     const model = modelGltf.scene;
@@ -384,6 +402,8 @@ export class PlayerController {
     this.bindAnimation("jumpStart", model, movementGltf.animations, "Jump_Start", true);
     this.bindAnimation("jumpIdle", model, movementGltf.animations, "Jump_Idle");
     this.bindAnimation("jumpLand", model, movementGltf.animations, "Jump_Land", true);
+    this.bindAnimation("throw", model, generalGltf.animations, "Throw", true);
+    this.bindAnimation("dash", model, movementAdvancedGltf.animations, "Dodge_Forward", true);
     this.playAnimation("idle", 0);
   }
 
@@ -454,6 +474,16 @@ export class PlayerController {
   }
 
   private getDesiredAnimation(wantsRunAnimation: boolean, dt: number): PlayerAnimationName {
+    if (this.throwAnimationTimer > 0) {
+      this.throwAnimationTimer = Math.max(0, this.throwAnimationTimer - dt);
+      return "throw";
+    }
+
+    if (this.dashAnimationTimer > 0) {
+      this.dashAnimationTimer = Math.max(0, this.dashAnimationTimer - dt);
+      return "dash";
+    }
+
     if (this.jumpStartAnimationTimer > 0) {
       this.jumpStartAnimationTimer = Math.max(0, this.jumpStartAnimationTimer - dt);
       return "jumpStart";

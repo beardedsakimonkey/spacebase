@@ -1,5 +1,6 @@
 import {
   box,
+  convexHull,
   MotionType,
   rigidBody,
   type Listener,
@@ -66,12 +67,20 @@ const BLUE_BASE_ZS = [-24, -30, -36, -42];
 const CORRIDOR_ZS = [-18, -12, -6, 0, 6, 12, 18];
 const LEFT_BELT_X = -5.1;
 const RIGHT_BELT_X = 5.1;
-const RAMP_RUN = 6;
-const RAMP_RISE = SECOND_STORY_TOP - FLOOR_TOP;
-const RAMP_LENGTH = Math.hypot(RAMP_RUN, RAMP_RISE);
-const RAMP_ANGLE = Math.atan2(RAMP_RISE, RAMP_RUN);
-const RAMP_HALF_EXTENTS: Vec3 = [2, 0.22, RAMP_LENGTH / 2];
 const Y_AXIS: Vec3 = [0, 1, 0];
+const RAMP_COLLIDER_SHAPE = convexHull.create({
+  positions: [
+    -2, 0, -3,
+    2, 0, -3,
+    -2, SECOND_STORY_TOP, -3,
+    2, SECOND_STORY_TOP, -3,
+    -2, 0, 3,
+    2, 0, 3,
+    -2, 1, 3,
+    2, 1, 3,
+  ],
+  convexRadius: 0.02,
+});
 
 export async function createArena(world: World, layers: PhysicsLayers, scene: THREE.Scene): Promise<Arena> {
   const entities: PhysicsEntity[] = [];
@@ -286,8 +295,8 @@ function buildRaisedDecks(world: World, layers: PhysicsLayers, scene: THREE.Scen
     }
   }
 
-  addRamp(world, layers, scene, assets.red.ramp, -9, 28, Math.PI, 1);
-  addRamp(world, layers, scene, assets.blue.ramp, 9, -28, 0, -1);
+  addRamp(world, layers, scene, assets.red.ramp, -9, 28, Math.PI);
+  addRamp(world, layers, scene, assets.blue.ramp, 9, -28, 0);
 
   for (const x of [-13, -9, -5]) {
     addBarrier(world, layers, redLowBarriers, x, SECOND_STORY_TOP, 43.5, 0, 2);
@@ -328,11 +337,14 @@ function addRamp(
   x: number,
   z: number,
   visualYaw: number,
-  riseDirectionZ: 1 | -1,
 ) {
   addModelInstances(scene, model, [{ x, y: 0, z, ry: visualYaw }]);
-  staticBox(world, layers.terrain, RAMP_HALF_EXTENTS, [x, SECOND_STORY_TOP / 2, z], {
-    quaternion: quatFromEuler(riseDirectionZ === 1 ? -RAMP_ANGLE : RAMP_ANGLE),
+  rigidBody.create(world, {
+    shape: RAMP_COLLIDER_SHAPE,
+    motionType: MotionType.STATIC,
+    objectLayer: layers.terrain,
+    position: [x, 0, z],
+    quaternion: yawQuat(visualYaw),
     friction: 1.35,
     restitution: 0.04,
   });
@@ -429,11 +441,6 @@ function yawQuat(yaw: number): Quat {
   const out = quat.create();
   quat.setAxisAngle(out, Y_AXIS, yaw);
   return out;
-}
-
-function quatFromEuler(rx: number, ry = 0, rz = 0): Quat {
-  const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz));
-  return [q.x, q.y, q.z, q.w];
 }
 
 function addLighting(scene: THREE.Scene) {

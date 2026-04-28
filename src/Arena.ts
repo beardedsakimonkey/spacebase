@@ -15,7 +15,6 @@ import {
   animateConveyorTextures,
   CONVEYOR_HALF_X,
   CONVEYOR_LONG_HALF_Z,
-  CONVEYOR_SPEED,
   createConveyorListener,
   loadConveyorModel,
 } from "./Conveyor";
@@ -177,8 +176,8 @@ export class Arena {
 
   private buildConveyors() {
     const beltLanes = [
-      { x: LEFT_BELT_X, ry: Math.PI, velocity: [0, 0, CONVEYOR_SPEED] as Vec3 },
-      { x: RIGHT_BELT_X, ry: 0, velocity: [0, 0, -CONVEYOR_SPEED] as Vec3 },
+      { x: LEFT_BELT_X, ry: Math.PI },
+      { x: RIGHT_BELT_X, ry: 0 },
     ];
 
     for (const lane of beltLanes) {
@@ -192,7 +191,6 @@ export class Arena {
           z,
           lane.ry,
           CONVEYOR_LONG_HALF_Z,
-          lane.velocity,
         );
       }
 
@@ -206,7 +204,6 @@ export class Arena {
           z,
           lane.ry,
           CONVEYOR_LONG_HALF_Z,
-          lane.velocity,
         );
       }
     }

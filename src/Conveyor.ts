@@ -21,13 +21,13 @@ type ConveyorUserData = {
   conveyorVelocity: Vec3;
 };
 
+const CONVEYOR_SPEED = 6.0;
+const CONVEYOR_TEXTURE_SCROLL_SPEED = 1.2;
 const CONVEYOR_HALF_Y = 0.5;
 const CONVEYOR_Y = -1;
 const CONVEYOR_CENTER_Y = -0.5;
-const CONVEYOR_TEXTURE_SCROLL_SPEED = 1.2;
 
 export const CONVEYOR_HALF_X = 2.1;
-export const CONVEYOR_SPEED = 6.0;
 export const CONVEYOR_LONG_HALF_Z = 4;
 
 export async function loadConveyorModel(path: string): Promise<ConveyorModel> {
@@ -54,13 +54,13 @@ export function addConveyorSegment(
   z: number,
   ry: number,
   halfZ: number,
-  velocity: Vec3,
 ) {
   const object = model.clone(true);
   object.position.set(x, CONVEYOR_Y, z);
   object.rotation.y = ry;
   scene.add(object);
 
+  const velocity = conveyorVelocityFromYaw(ry);
   rigidBody.create(world, {
     shape: box.create({ halfExtents: [CONVEYOR_HALF_X, CONVEYOR_HALF_Y, halfZ] }),
     motionType: MotionType.STATIC,
@@ -164,4 +164,8 @@ export function getConveyorVelocity(body: RigidBody): Vec3 | null {
 
 function yawQuat(yaw: number) {
   return new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw).toArray() as [number, number, number, number];
+}
+
+function conveyorVelocityFromYaw(yaw: number): Vec3 {
+  return [-Math.sin(yaw) * CONVEYOR_SPEED, 0, -Math.cos(yaw) * CONVEYOR_SPEED];
 }

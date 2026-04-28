@@ -1,7 +1,7 @@
 import { updateWorld } from "crashcat";
 import * as THREE from "three";
 import "./styles.css";
-import { createArena } from "./arena";
+import { Arena } from "./arena";
 import { BallController } from "./ball";
 import { FollowCamera } from "./camera";
 import { DevHud } from "./hud";
@@ -35,7 +35,7 @@ renderer.domElement.focus();
   const camera = new FollowCamera(window.innerWidth / window.innerHeight);
   const input = new InputController(renderer.domElement);
   const physics = createPhysicsContext();
-  const arena = await createArena(physics.world, physics.layers, scene);
+  const arena = await Arena.create(physics.world, physics.layers, scene);
   const player = new PlayerController(physics.world, physics.layers, scene);
   const ball = new BallController(physics.world, physics.layers, scene);
   const debugPhysics = createDebugPhysicsObject(scene);

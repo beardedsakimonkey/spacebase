@@ -607,6 +607,10 @@ export class PlayerController {
     desiredHorizontal[0] = this.input.moveDirection[0] * targetSpeed;
     desiredHorizontal[1] = 0;
     desiredHorizontal[2] = this.input.moveDirection[2] * targetSpeed;
+    // Run speed is measured relative to the surface so conveyors add to, rather than cancel, player motion.
+    desiredHorizontal[0] += this.groundSurfaceVelocity[0];
+    desiredHorizontal[1] += this.groundSurfaceVelocity[1];
+    desiredHorizontal[2] += this.groundSurfaceVelocity[2];
 
     deltaVelocity[0] = desiredHorizontal[0] - currentHorizontal[0];
     deltaVelocity[1] = 0;

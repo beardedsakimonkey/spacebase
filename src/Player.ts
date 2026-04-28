@@ -98,7 +98,6 @@ const dashVelocity: Vec3 = vec3.create();
 const worldUp: Vec3 = vec3.fromValues(0, 1, 0);
 const visualPosition = new THREE.Vector3();
 const visualForward = new THREE.Vector3();
-const debugGroundNormal = new THREE.Vector3();
 
 function normalizeAngle(angle: number) {
   while (angle > Math.PI) angle -= Math.PI * 2;
@@ -161,20 +160,7 @@ export class PlayerController {
   readonly tuning: Readonly<PlayerTuning>;
 
   private readonly queryFilter: Filter;
-  private readonly debugGroup = new THREE.Group();
   private readonly animator = new PlayerAnimator();
-  private readonly groundRayHelper = new THREE.ArrowHelper(
-    new THREE.Vector3(0, -1, 0),
-    new THREE.Vector3(),
-    1,
-    0xff3b30,
-  );
-  private readonly groundNormalHelper = new THREE.ArrowHelper(
-    new THREE.Vector3(0, 1, 0),
-    new THREE.Vector3(),
-    1,
-    0x46c7ff,
-  );
   private readonly input: PlayerInputState = {
     moveDirection: vec3.create(),
     wantToJump: false,
@@ -229,10 +215,7 @@ export class PlayerController {
     this.body.motionProperties.gravityFactor = tuning.normalGravityScale;
     this.queryFilter = filter.create(world.settings.layers);
     this.object = this.createVisual();
-
-    this.debugGroup.add(this.groundRayHelper, this.groundNormalHelper);
-    this.debugGroup.visible = false;
-    scene.add(this.object, this.debugGroup);
+    scene.add(this.object);
   }
 
   update(
@@ -271,11 +254,6 @@ export class PlayerController {
     if (this.body.position[1] < RESPAWN_Y) {
       this.reset(world);
     }
-    this.updateDebugHelpers();
-  }
-
-  setDebugVisible(visible: boolean) {
-    this.debugGroup.visible = visible;
   }
 
   reset(world: World) {
@@ -679,23 +657,5 @@ export class PlayerController {
     this.object.position.set(position[0], position[1], position[2]);
     // Render with stable gameplay yaw; physics auto-balance can jitter while correcting capsule rotation.
     this.object.rotation.set(0, this.facingYaw, 0);
-  }
-
-  private updateDebugHelpers() {
-    const position = this.body.position;
-    this.groundRayHelper.position.set(position[0], position[1] - this.tuning.capsuleHalfHeight, position[2]);
-    this.groundRayHelper.setLength(this.groundDistance > 0 ? this.groundDistance : 1);
-    this.groundRayHelper.setColor(this.isOnGround ? 0x34e0a1 : 0xff3b30);
-    this.groundNormalHelper.visible = this.isOnGround;
-
-    if (this.isOnGround) {
-      this.groundNormalHelper.position.set(
-        this.groundPosition[0],
-        this.groundPosition[1],
-        this.groundPosition[2],
-      );
-      debugGroundNormal.set(this.actualSlopeNormal[0], this.actualSlopeNormal[1], this.actualSlopeNormal[2]);
-      this.groundNormalHelper.setDirection(debugGroundNormal);
-    }
   }
 }

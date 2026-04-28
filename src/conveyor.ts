@@ -21,13 +21,13 @@ type ConveyorUserData = {
   conveyorVelocity: Vec3;
 };
 
-const CONVEYOR_TEXTURE_SCROLL_SPEED = 0.85;
 const CONVEYOR_HALF_X = 2.1;
 const CONVEYOR_HALF_Y = 0.5;
 const CONVEYOR_Y = -1;
 const CONVEYOR_CENTER_Y = -0.5;
+const CONVEYOR_TEXTURE_SCROLL_SPEED = 0.85;
 
-export const CONVEYOR_SPEED = 10.0;
+export const CONVEYOR_SPEED = 8.0;
 export const CONVEYOR_LONG_HALF_Z = 4;
 export const CONVEYOR_SHORT_HALF_Z = 2;
 
@@ -158,7 +158,7 @@ function cloneConveyorThreadMaterial(
   return cloned;
 }
 
-function getConveyorVelocity(body: RigidBody): Vec3 | null {
+export function getConveyorVelocity(body: RigidBody): Vec3 | null {
   const userData = body.userData as Partial<ConveyorUserData> | null;
   return userData?.conveyorVelocity ?? null;
 }

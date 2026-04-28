@@ -19,6 +19,7 @@ import { vec3 } from "mathcat";
 import * as THREE from "three";
 import type { MovementInput } from "./input";
 import { ASSETS } from "./assets";
+import { getConveyorVelocity } from "./conveyor";
 import { loadGltf } from "./kaykit";
 import type { PhysicsLayers } from "./physics";
 
@@ -187,6 +188,7 @@ export class PlayerController {
   private groundBodyId: number | null = null;
   private groundSubShapeId = 0;
   private groundPosition: Vec3 = vec3.create();
+  private readonly groundSurfaceVelocity: Vec3 = vec3.create();
   private groundDistance = 0;
   private dashTimer = 0;
   private dashCooldownTimer = 0;
@@ -536,6 +538,7 @@ export class PlayerController {
     this.actualSlopeNormal = [0, 1, 0];
     this.actualSlopeAngle = 0;
     this.canJump = false;
+    vec3.set(this.groundSurfaceVelocity, 0, 0, 0);
 
     if (this.jumpGroundIgnoreTimer > 0) {
       // Fresh jumps ignore nearby ground so grounded snap cannot pull the player back down.
@@ -577,6 +580,10 @@ export class PlayerController {
     // Ground state comes only from center contact; forward probes made ledges feel sticky.
     const groundBody = rigidBody.get(world, this.groundBodyId);
     if (groundBody) {
+      const conveyorVelocity = getConveyorVelocity(groundBody);
+      if (conveyorVelocity) {
+        vec3.set(this.groundSurfaceVelocity, conveyorVelocity[0], conveyorVelocity[1], conveyorVelocity[2]);
+      }
       rigidBody.getSurfaceNormal(this.actualSlopeNormal, groundBody, this.groundPosition, this.groundSubShapeId);
       this.actualSlopeAngle = Math.acos(
         Math.max(-1, Math.min(1, vec3.dot(this.actualSlopeNormal, [0, 1, 0] as Vec3))),
@@ -648,9 +655,9 @@ export class PlayerController {
       return;
     }
     const velocity = this.body.motionProperties.linearVelocity;
-    dragImpulse[0] = -velocity[0] * this.tuning.dragDampingC;
+    dragImpulse[0] = -(velocity[0] - this.groundSurfaceVelocity[0]) * this.tuning.dragDampingC;
     dragImpulse[1] = 0;
-    dragImpulse[2] = -velocity[2] * this.tuning.dragDampingC;
+    dragImpulse[2] = -(velocity[2] - this.groundSurfaceVelocity[2]) * this.tuning.dragDampingC;
     rigidBody.addImpulse(world, this.body, dragImpulse);
   }
 

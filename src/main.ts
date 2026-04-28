@@ -68,6 +68,9 @@ renderer.domElement.focus();
   const throwVelocityVec: [number, number, number] = [0, 0, 0];
   let throwCharging = false;
   let throwChargePower = 0;
+  let throwWindupTimer = 0;
+  const pendingThrowParams = { direction: new THREE.Vector3(), power: 0, active: false };
+  const THROW_WINDUP_SECONDS = 0.2;
 
   function animationFrame(now: number) {
     requestAnimationFrame(animationFrame);
@@ -151,11 +154,22 @@ renderer.domElement.focus();
       }
 
       if (pendingChargedThrow) {
-        ball.throw(physics.world, player, throwDirection, throwChargePower);
-        player.startThrowAnimation();
+        player.startThrowAnimation(throwDirection);
+        pendingThrowParams.direction.copy(throwDirection);
+        pendingThrowParams.power = throwChargePower;
+        pendingThrowParams.active = true;
+        throwWindupTimer = THROW_WINDUP_SECONDS;
         throwCharging = false;
         throwChargePower = 0;
         pendingChargedThrow = false;
+      }
+
+      if (pendingThrowParams.active) {
+        throwWindupTimer -= PHYSICS_DT;
+        if (throwWindupTimer <= 0) {
+          ball.throw(physics.world, player, pendingThrowParams.direction, pendingThrowParams.power);
+          pendingThrowParams.active = false;
+        }
       }
 
       const physicsStart = performance.now();

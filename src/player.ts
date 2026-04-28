@@ -71,7 +71,7 @@ const PLAYER_MODEL_OFFSET_Y = -0.9;
 const ANIMATION_FADE_SECONDS = 0.12;
 const JUMP_START_ANIMATION_SECONDS = 0.28;
 const LAND_ANIMATION_SECONDS = 0.24;
-const THROW_ANIMATION_SECONDS = 1.37;
+const THROW_ANIMATION_SECONDS = 1.37 / 2;
 const DASH_ANIMATION_SECONDS = 0.40;
 
 const rayCollector = createClosestCastRayCollector();
@@ -303,7 +303,12 @@ export class PlayerController {
     this.playAnimation("idle", 0.05);
   }
 
-  startThrowAnimation() {
+  startThrowAnimation(direction: THREE.Vector3) {
+    const hx = direction.x;
+    const hz = direction.z;
+    if (Math.hypot(hx, hz) > 0.001) {
+      this.modelYaw = Math.atan2(hx, hz);
+    }
     this.throwAnimationTimer = THROW_ANIMATION_SECONDS;
     this.dashAnimationTimer = 0;
     this.jumpStartAnimationTimer = 0;
@@ -465,6 +470,8 @@ export class PlayerController {
     const action = this.animationActions.get(desired);
     if (action && desired === "run") {
       action.timeScale = THREE.MathUtils.clamp(horizontalSpeed / 8.2, 0.8, 1.65);
+    } else if (action && desired === "throw") {
+      action.timeScale = 2;
     } else if (action) {
       action.timeScale = 1;
     }
@@ -521,6 +528,9 @@ export class PlayerController {
   }
 
   private updateModelYaw(dt: number, cameraPosition: THREE.Vector3) {
+    if (this.throwAnimationTimer > 0) {
+      return;
+    }
     if (vec3.length(this.input.moveDirection) > 0.001) {
       const targetYaw = Math.atan2(this.input.moveDirection[0], this.input.moveDirection[2]);
       let deltaYaw = normalizeAngle(targetYaw - this.modelYaw);

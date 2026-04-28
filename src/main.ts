@@ -7,7 +7,7 @@ import { FollowCamera } from "./camera";
 import { DevHud } from "./hud";
 import { InputController } from "./input";
 import { PlayerController } from "./Player";
-import { createDebugPhysicsObject, createPhysicsContext, syncPhysicsEntities } from "./physics";
+import { createPhysicsContext, syncPhysicsEntities } from "./physics";
 
 const PHYSICS_DT = 1 / 60;
 const THROW_CHARGE_SECONDS = 1.8;
@@ -37,18 +37,23 @@ renderer.domElement.focus();
   const arena = await Arena.create(physics.world, physics.layers, scene);
   const player = new PlayerController(physics.world, physics.layers, scene);
   const ball = new BallController(physics.world, physics.layers, scene);
-  const debugPhysics = createDebugPhysicsObject(scene);
   const debugSettings = {
-    physics: false,
+    sunShadow: false,
   };
   const playerRenderPosition = new THREE.Vector3();
 
-  const hud = new DevHud();
+  const hud = new DevHud({
+    debugState: debugSettings,
+    onSunShadowDebugChange: (enabled) => {
+      debugSettings.sunShadow = enabled;
+    },
+  });
 
   window.addEventListener("resize", () => {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(window.innerWidth, window.innerHeight);
     camera.resize(window.innerWidth / window.innerHeight);
+    arena.resizeSunShadowDebug();
   });
 
   let lastTime = performance.now();
@@ -90,7 +95,7 @@ renderer.domElement.focus();
     pendingDebugToggle ||= input.consumeDebugPressed();
 
     if (pendingDebugToggle) {
-      debugSettings.physics = !debugSettings.physics;
+      debugSettings.sunShadow = !debugSettings.sunShadow;
       pendingDebugToggle = false;
     }
 
@@ -185,7 +190,8 @@ renderer.domElement.focus();
     }
 
     camera.update(frameTime, player.getPosition(playerRenderPosition));
-    debugPhysics.update(physics.world, debugSettings.physics);
+    arena.updateSunShadowDebug(debugSettings.sunShadow);
+    hud.setDebugState(debugSettings);
     hud.update({
       fps: smoothedFps,
       physicsMs: lastPhysicsMs,
@@ -194,6 +200,7 @@ renderer.domElement.focus();
     });
 
     renderer.render(scene, camera.camera);
+    arena.renderSunShadowDebug(renderer);
   }
 
   requestAnimationFrame(animationFrame);

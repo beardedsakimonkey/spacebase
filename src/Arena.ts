@@ -9,6 +9,7 @@ import {
 import type { Quat, Vec3 } from "mathcat";
 import { quat } from "mathcat";
 import * as THREE from "three";
+import { ShadowMapViewer } from "three/addons/utils/ShadowMapViewer.js";
 import { platformerAsset } from "./assets";
 import {
   addConveyorSegment,
@@ -29,6 +30,10 @@ type ModelTransform = TileTransform & {
 
 type BarrierPlacement = TileTransform & {
   height: number;
+};
+
+type SunShadowDebug = {
+  shadowMapViewer: ShadowMapViewer;
 };
 
 const PLATFORM_HEIGHT = 4;
@@ -84,6 +89,7 @@ export class Arena {
   private blueRamp!: THREE.Group;
   private redRamp!: THREE.Group;
   private conveyorTextures: THREE.Texture[] = [];
+  private sunShadowDebug!: SunShadowDebug;
 
   private constructor(
     private readonly world: World,
@@ -95,6 +101,7 @@ export class Arena {
     const arena = new Arena(world, layers, scene);
 
     const sun = addLighting(scene);
+    arena.sunShadowDebug = createSunShadowDebug(sun);
     addSky(scene, sun);
 
     await arena.loadAssets();
@@ -108,6 +115,26 @@ export class Arena {
 
   update(time: number, _dt: number) {
     animateConveyorTextures(this.conveyorTextures, time);
+  }
+
+  updateSunShadowDebug(visible: boolean) {
+    this.sunShadowDebug.shadowMapViewer.enabled = visible;
+    if (visible) {
+      layoutSunShadowMapViewer(this.sunShadowDebug.shadowMapViewer);
+    }
+  }
+
+  renderSunShadowDebug(renderer: THREE.WebGLRenderer) {
+    if (this.sunShadowDebug.shadowMapViewer.enabled) {
+      this.sunShadowDebug.shadowMapViewer.render(renderer);
+    }
+  }
+
+  resizeSunShadowDebug() {
+    const wasEnabled = this.sunShadowDebug.shadowMapViewer.enabled;
+    this.sunShadowDebug.shadowMapViewer.enabled = true;
+    layoutSunShadowMapViewer(this.sunShadowDebug.shadowMapViewer);
+    this.sunShadowDebug.shadowMapViewer.enabled = wasEnabled;
   }
 
   private async loadAssets() {
@@ -425,11 +452,12 @@ function addLighting(scene: THREE.Scene) {
   scene.add(new THREE.HemisphereLight(0x8899cc, 0x221133, 2.0));
 
   const sun = new THREE.DirectionalLight(0xffff00, 1.5);
+  sun.name = "Sun shadow";
   sun.position.set(24, 32, 22);
   sun.castShadow = true;
   sun.shadow.mapSize.setScalar(4096);
-  sun.shadow.camera.left = -40;
-  sun.shadow.camera.right = 40;
+  sun.shadow.camera.left = -50;
+  sun.shadow.camera.right = 50;
   sun.shadow.camera.top = 50;
   sun.shadow.camera.bottom = -50;
   sun.shadow.camera.near = 1;
@@ -439,6 +467,21 @@ function addLighting(scene: THREE.Scene) {
 
   scene.add(sun);
   return sun;
+}
+
+function createSunShadowDebug(sun: THREE.DirectionalLight): SunShadowDebug {
+  const shadowMapViewer = new ShadowMapViewer(sun);
+  shadowMapViewer.enabled = false;
+  layoutSunShadowMapViewer(shadowMapViewer);
+
+  return { shadowMapViewer };
+}
+
+function layoutSunShadowMapViewer(viewer: ShadowMapViewer) {
+  const size = Math.min(260, Math.max(160, Math.floor(window.innerWidth * 0.22)));
+  viewer.size.set(size, size);
+  viewer.position.set(window.innerWidth - size - 14, 14);
+  viewer.update();
 }
 
 function addSky(scene: THREE.Scene, sun: THREE.DirectionalLight) {

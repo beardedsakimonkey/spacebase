@@ -2,15 +2,22 @@ import {
   box,
   MotionType,
   rigidBody,
-  type ContactSettings,
   type Listener,
-  type RigidBody,
   type World,
 } from "crashcat";
 import type { Quat, Vec3 } from "mathcat";
 import { quat } from "mathcat";
 import * as THREE from "three";
 import { ASSETS } from "./assets";
+import {
+  addConveyorSegment,
+  animateConveyorTextures,
+  CONVEYOR_LONG_HALF_Z,
+  CONVEYOR_SHORT_HALF_Z,
+  CONVEYOR_SPEED,
+  createConveyorListener,
+  loadConveyorModel,
+} from "./conveyor";
 import { buildInstancedMesh, loadGltfMesh, loadGltfScene, type GltfMesh, type TileTransform } from "./kaykit";
 import type { PhysicsEntity, PhysicsLayers } from "./physics";
 
@@ -37,16 +44,13 @@ type ArenaAssets = {
   platform6x6x4: GltfMesh;
   blue: TeamAssets;
   red: TeamAssets;
+  conveyorTextures: THREE.Texture[];
 };
 
 type ModelTransform = TileTransform & {
   rx?: number;
   rz?: number;
   scale?: number;
-};
-
-type ConveyorUserData = {
-  conveyorVelocity: Vec3;
 };
 
 type BarrierPlacement = TileTransform & {
@@ -60,13 +64,6 @@ const BASE_XS = [-18, -12, -6, 0, 6, 12, 18];
 const RED_BASE_ZS = [24, 30, 36, 42];
 const BLUE_BASE_ZS = [-24, -30, -36, -42];
 const CORRIDOR_ZS = [-18, -12, -6, 0, 6, 12, 18];
-const CONVEYOR_SPEED = 5.8;
-const CONVEYOR_HALF_X = 2.1;
-const CONVEYOR_HALF_Y = 0.5;
-const CONVEYOR_LONG_HALF_Z = 4;
-const CONVEYOR_SHORT_HALF_Z = 2;
-const CONVEYOR_Y = -1;
-const CONVEYOR_CENTER_Y = -0.5;
 const LEFT_BELT_X = -5.1;
 const RIGHT_BELT_X = 5.1;
 const RAMP_RUN = 6;
@@ -92,8 +89,8 @@ export async function createArena(world: World, layers: PhysicsLayers, scene: TH
   return {
     entities,
     listener: createConveyorListener(),
-    update() {
-      // Static arena; conveyor motion is applied through the physics contact listener.
+    update(time: number) {
+      animateConveyorTextures(assets.conveyorTextures, time);
     },
   };
 }
@@ -129,10 +126,10 @@ async function loadArenaAssets(): Promise<ArenaAssets> {
     loadGltfMesh(ASSETS.barrier_tall),
     loadGltfMesh(ASSETS.barrier_low_blue),
     loadGltfMesh(ASSETS.barrier_low),
-    loadModel(ASSETS.conveyor_4x8x1_blue),
-    loadModel(ASSETS.conveyor_4x8x1_red),
-    loadModel(ASSETS.conveyor_4x4x1_blue),
-    loadModel(ASSETS.conveyor_4x4x1_red),
+    loadConveyorModel(ASSETS.conveyor_4x8x1_blue),
+    loadConveyorModel(ASSETS.conveyor_4x8x1_red),
+    loadConveyorModel(ASSETS.conveyor_4x4x1_blue),
+    loadConveyorModel(ASSETS.conveyor_4x4x1_red),
     loadModel(ASSETS.platform_slope_4x6x4_blue),
     loadModel(ASSETS.platform_slope_4x6x4_red),
     loadModel(ASSETS.flag_blue),
@@ -151,8 +148,8 @@ async function loadArenaAssets(): Promise<ArenaAssets> {
       platform6x6x4: platform6x6x4Blue,
       barrierTall: barrierTallBlue,
       barrierLow: barrierLowBlue,
-      conveyorLong: conveyorLongBlue,
-      conveyorShort: conveyorShortBlue,
+      conveyorLong: conveyorLongBlue.model,
+      conveyorShort: conveyorShortBlue.model,
       ramp: rampBlue,
       flag: flagBlue,
       archWide: archWideBlue,
@@ -163,14 +160,20 @@ async function loadArenaAssets(): Promise<ArenaAssets> {
       platform6x6x4: platform6x6x4Red,
       barrierTall: barrierTallRed,
       barrierLow: barrierLowRed,
-      conveyorLong: conveyorLongRed,
-      conveyorShort: conveyorShortRed,
+      conveyorLong: conveyorLongRed.model,
+      conveyorShort: conveyorShortRed.model,
       ramp: rampRed,
       flag: flagRed,
       archWide: archWideRed,
       safetyNet: safetyNetRed,
       pipeStraight: pipeStraightRed,
     },
+    conveyorTextures: [
+      ...conveyorLongBlue.textures,
+      ...conveyorLongRed.textures,
+      ...conveyorShortBlue.textures,
+      ...conveyorShortRed.textures,
+    ],
   };
 }
 
@@ -226,26 +229,6 @@ function buildConveyors(world: World, layers: PhysicsLayers, scene: THREE.Scene,
       addConveyorSegment(world, layers, scene, assets.red.conveyorLong, lane.x, z, lane.ry, CONVEYOR_LONG_HALF_Z, lane.velocity);
     }
   }
-}
-
-function addConveyorSegment(
-  world: World,
-  layers: PhysicsLayers,
-  scene: THREE.Scene,
-  model: THREE.Group,
-  x: number,
-  z: number,
-  ry: number,
-  halfZ: number,
-  velocity: Vec3,
-) {
-  addModelInstances(scene, model, [{ x, y: CONVEYOR_Y, z, ry }]);
-  staticBox(world, layers.terrain, [CONVEYOR_HALF_X, CONVEYOR_HALF_Y, halfZ], [x, CONVEYOR_CENTER_Y, z], {
-    quaternion: yawQuat(ry),
-    friction: 2.8,
-    restitution: 0.02,
-    userData: { conveyorVelocity: velocity } satisfies ConveyorUserData,
-  });
 }
 
 function buildBoundaryWalls(world: World, layers: PhysicsLayers, scene: THREE.Scene, assets: ArenaAssets) {
@@ -417,40 +400,6 @@ function addModelInstances(scene: THREE.Scene, source: THREE.Group, placements: 
   }
 }
 
-function createConveyorListener(): Listener {
-  const applyConveyorContact = (bodyA: RigidBody, bodyB: RigidBody, _manifold: unknown, settings: ContactSettings) => {
-    const velocityA = getConveyorVelocity(bodyA);
-    const velocityB = getConveyorVelocity(bodyB);
-
-    if (!velocityA && !velocityB) {
-      return;
-    }
-
-    settings.combinedFriction = Math.max(settings.combinedFriction, 3.5);
-
-    if (velocityA) {
-      settings.relativeLinearSurfaceVelocity[0] -= velocityA[0];
-      settings.relativeLinearSurfaceVelocity[1] -= velocityA[1];
-      settings.relativeLinearSurfaceVelocity[2] -= velocityA[2];
-    }
-    if (velocityB) {
-      settings.relativeLinearSurfaceVelocity[0] += velocityB[0];
-      settings.relativeLinearSurfaceVelocity[1] += velocityB[1];
-      settings.relativeLinearSurfaceVelocity[2] += velocityB[2];
-    }
-  };
-
-  return {
-    onContactAdded: applyConveyorContact,
-    onContactPersisted: applyConveyorContact,
-  };
-}
-
-function getConveyorVelocity(body: RigidBody): Vec3 | null {
-  const userData = body.userData as Partial<ConveyorUserData> | null;
-  return userData?.conveyorVelocity ?? null;
-}
-
 function addTiles(scene: THREE.Scene, mesh: GltfMesh, tiles: TileTransform[]) {
   if (tiles.length === 0) {
     return;
@@ -463,7 +412,7 @@ function staticBox(
   layer: number,
   halfExtents: Vec3,
   position: Vec3,
-  options: { quaternion?: Quat; friction?: number; restitution?: number; userData?: unknown } = {},
+  options: { quaternion?: Quat; friction?: number; restitution?: number } = {},
 ) {
   return rigidBody.create(world, {
     shape: box.create({ halfExtents }),
@@ -473,7 +422,6 @@ function staticBox(
     quaternion: options.quaternion,
     friction: options.friction ?? 1,
     restitution: options.restitution ?? 0.08,
-    userData: options.userData,
   });
 }
 

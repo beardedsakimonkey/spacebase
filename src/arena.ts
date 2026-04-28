@@ -87,20 +87,6 @@ export async function createArena(world: World, layers: PhysicsLayers, scene: TH
   };
 }
 
-function candyRed(mesh: GltfMesh): GltfMesh {
-  const material = mesh.material.clone();
-
-  if (material instanceof THREE.MeshStandardMaterial) {
-    material.color.set(0xffffff);      // saturated candy red multiplier
-    material.roughness = 0.32;         // glossier
-    material.metalness = 0.0;
-    material.emissive.set(0x3a0006);   // tiny color lift in shadows
-    material.emissiveIntensity = 0.08;
-  }
-
-  return { ...mesh, material };
-}
-
 async function loadArenaAssets(): Promise<ArenaAssets> {
   const [
     platform6x6x4,
@@ -120,8 +106,8 @@ async function loadArenaAssets(): Promise<ArenaAssets> {
     platform6x6x4,
     platform6x6x4Blue,
     platform6x6x4Red,
-    barrierTall: candyRed(barrierTall),
-    barrierLow: candyRed(barrierLow),
+    barrierTall,
+    barrierLow,
   };
 }
 

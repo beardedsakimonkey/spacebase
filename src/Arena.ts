@@ -425,16 +425,19 @@ function yawQuat(yaw: number): Quat {
 function addLighting(scene: THREE.Scene) {
   scene.add(new THREE.HemisphereLight(0x8899cc, 0x221133, 2.0));
 
-  const sun = new THREE.DirectionalLight(0xffffff, 1.5);
+  const sun = new THREE.DirectionalLight(0x00ffff, 1.5);
   sun.position.set(24, 32, 22);
   sun.castShadow = true;
-  sun.shadow.mapSize.setScalar(2048);
-  sun.shadow.camera.near = 0.5;
-  sun.shadow.camera.far = 130;
-  sun.shadow.camera.left = -58;
-  sun.shadow.camera.right = 58;
-  sun.shadow.camera.top = 68;
-  sun.shadow.camera.bottom = -68;
+  sun.shadow.mapSize.setScalar(4096);
+  sun.shadow.camera.left = -40;
+  sun.shadow.camera.right = 40;
+  sun.shadow.camera.top = 50;
+  sun.shadow.camera.bottom = -50;
+  sun.shadow.camera.near = 1;
+  sun.shadow.camera.far = 90;
+  sun.shadow.bias = -0.0002;
+  sun.shadow.normalBias = 0.03;
+
   scene.add(sun);
 }
 

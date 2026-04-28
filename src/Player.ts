@@ -20,6 +20,7 @@ import * as THREE from "three";
 import type { MovementInput } from "./input";
 import { characterAnimationAsset, characterMannequinAsset } from "./assets";
 import { getConveyorVelocity } from "./Conveyor";
+import { remapMannequinBodyColor, type MannequinBodyColor } from "./mannequin";
 import { PlayerAnimator } from "./PlayerAnimator";
 import { loadGltf } from "./util/kaykit";
 import type { PhysicsLayers } from "./physics";
@@ -37,6 +38,7 @@ type PlayerInputState = {
 
 const PLAYER_MODEL_SCALE = 0.82;
 const PLAYER_MODEL_OFFSET_Y = -0.9;
+const PLAYER_BODY_COLOR: MannequinBodyColor = "green";
 const MOVE_INPUT_EPSILON = 0.001;
 const TURN_TARGET_EPSILON = 0.08;
 const REVERSAL_TURN_THRESHOLD = Math.PI * 0.82;
@@ -319,6 +321,7 @@ export class PlayerController {
     const model = modelGltf.scene;
     model.scale.setScalar(PLAYER_MODEL_SCALE);
     model.position.y = PLAYER_MODEL_OFFSET_Y;
+    remapMannequinBodyColor(model, PLAYER_BODY_COLOR);
     model.traverse((node) => {
       if (node instanceof THREE.Mesh) {
         node.castShadow = true;

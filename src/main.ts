@@ -1,12 +1,12 @@
 import { updateWorld } from "crashcat";
 import * as THREE from "three";
 import "./styles.css";
-import { Arena } from "./arena";
-import { BallController } from "./ball";
+import { Arena } from "./Arena";
+import { BallController } from "./Ball";
 import { FollowCamera } from "./camera";
 import { DevHud } from "./hud";
 import { InputController } from "./input";
-import { PlayerController } from "./player";
+import { PlayerController } from "./Player";
 import { createDebugPhysicsObject, createPhysicsContext, syncPhysicsEntities } from "./physics";
 import { ThrowChargeMeter, TrajectoryPreview } from "./throw-preview";
 

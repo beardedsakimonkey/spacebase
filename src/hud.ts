@@ -1,5 +1,5 @@
-import type { BallTelemetry } from "./ball";
-import type { PlayerTelemetry } from "./player";
+import type { BallTelemetry } from "./Ball";
+import type { PlayerTelemetry } from "./Player";
 
 export type DevHudStats = {
   fps: number;

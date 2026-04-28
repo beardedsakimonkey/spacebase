@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { platformerNeutralAsset } from "./assets";
 import { loadGltfScene } from "./kaykit";
 import type { PhysicsLayers } from "./physics";
-import type { PlayerController } from "./player";
+import type { PlayerController } from "./Player";
 
 type BallTuning = {
   pickupRange: number;

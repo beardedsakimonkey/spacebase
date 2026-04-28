@@ -322,7 +322,8 @@ export class PlayerController {
     model.traverse((node) => {
       if (node instanceof THREE.Mesh) {
         node.castShadow = true;
-        node.receiveShadow = true;
+        // Self-shadowing on the animated mannequin creates visible flicker.
+        node.receiveShadow = false;
       }
     });
     group.add(model);

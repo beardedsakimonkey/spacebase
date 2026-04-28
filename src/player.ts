@@ -438,7 +438,8 @@ export class PlayerController {
 
     const velocity = this.body.motionProperties.linearVelocity;
     const horizontalSpeed = Math.hypot(velocity[0], velocity[2]);
-    const desired = this.getDesiredAnimation(horizontalSpeed, dt);
+    const wantsRunAnimation = vec3.length(this.input.moveDirection) > 0.001 || this.dashTimer > 0;
+    const desired = this.getDesiredAnimation(wantsRunAnimation, dt);
     const action = this.animationActions.get(desired);
     if (action && desired === "run") {
       action.timeScale = THREE.MathUtils.clamp(horizontalSpeed / 8.2, 0.8, 1.65);
@@ -450,7 +451,7 @@ export class PlayerController {
     this.animationMixer.update(dt);
   }
 
-  private getDesiredAnimation(horizontalSpeed: number, dt: number): PlayerAnimationName {
+  private getDesiredAnimation(wantsRunAnimation: boolean, dt: number): PlayerAnimationName {
     if (this.jumpStartAnimationTimer > 0) {
       this.jumpStartAnimationTimer = Math.max(0, this.jumpStartAnimationTimer - dt);
       return "jumpStart";
@@ -465,7 +466,7 @@ export class PlayerController {
       return "jumpIdle";
     }
 
-    if (horizontalSpeed > 0.35) {
+    if (wantsRunAnimation) {
       return "run";
     }
 

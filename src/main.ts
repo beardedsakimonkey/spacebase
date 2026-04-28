@@ -169,7 +169,7 @@ renderer.domElement.focus();
       }
 
       const physicsStart = performance.now();
-      updateWorld(physics.world, undefined, PHYSICS_DT);
+      updateWorld(physics.world, arena.listener, PHYSICS_DT);
       lastPhysicsMs = performance.now() - physicsStart;
 
       syncPhysicsEntities(arena.entities);

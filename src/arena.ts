@@ -1,88 +1,99 @@
-import { box, MotionType, rigidBody, type RigidBody, type World } from "crashcat";
+import {
+  box,
+  MotionType,
+  rigidBody,
+  type ContactSettings,
+  type Listener,
+  type RigidBody,
+  type World,
+} from "crashcat";
 import type { Quat, Vec3 } from "mathcat";
 import { quat } from "mathcat";
 import * as THREE from "three";
 import { ASSETS } from "./assets";
-import { buildInstancedMesh, loadGltfMesh, type GltfMesh, type TileTransform } from "./kaykit";
+import { buildInstancedMesh, loadGltfMesh, loadGltfScene, type GltfMesh, type TileTransform } from "./kaykit";
 import type { PhysicsEntity, PhysicsLayers } from "./physics";
 
 export type Arena = {
   entities: PhysicsEntity[];
+  listener: Listener;
   update(time: number, dt: number): void;
+};
+
+type TeamAssets = {
+  platform6x6x4: GltfMesh;
+  barrierTall: GltfMesh;
+  barrierLow: GltfMesh;
+  conveyorLong: THREE.Group;
+  conveyorShort: THREE.Group;
+  ramp: THREE.Group;
+  flag: THREE.Group;
+  archWide: THREE.Group;
+  safetyNet: THREE.Group;
+  pipeStraight: THREE.Group;
 };
 
 type ArenaAssets = {
   platform6x6x4: GltfMesh;
-  platform6x6x4Blue: GltfMesh;
-  platform6x6x4Red: GltfMesh;
-  barrierTall: GltfMesh;
-  barrierLow: GltfMesh;
+  blue: TeamAssets;
+  red: TeamAssets;
 };
 
-type Slider = {
-  body: RigidBody;
-  base: Vec3;
-  axis: "x" | "z";
-  amplitude: number;
-  speed: number;
-  phase: number;
-  yaw: number;
+type ModelTransform = TileTransform & {
+  rx?: number;
+  rz?: number;
+  scale?: number;
 };
 
-type SliderConfig = Omit<Slider, "body">;
-
-type SpinnerArm = {
-  body: RigidBody;
-  yawOffset: number;
+type ConveyorUserData = {
+  conveyorVelocity: Vec3;
 };
 
-const FIELD_HALF_X = 24;
-const FIELD_HALF_Z = 21;
+type BarrierPlacement = TileTransform & {
+  height: number;
+};
+
 const PLATFORM_HEIGHT = 4;
-const PLATFORM_BASE_Y = -PLATFORM_HEIGHT;
-const raisedFieldTops = new Map<string, number>([
-  ["-15,-12", 1.0],
-  ["15,-12", 1.55],
-  ["-9,0", 0.9],
-  ["9,0", 1.35],
-  ["-15,12", 1.15],
-  ["15,12", 1.7],
-]);
+const FLOOR_TOP = 0;
+const SECOND_STORY_TOP = 4;
+const BASE_XS = [-18, -12, -6, 0, 6, 12, 18];
+const RED_BASE_ZS = [24, 30, 36, 42];
+const BLUE_BASE_ZS = [-24, -30, -36, -42];
+const CORRIDOR_ZS = [-18, -12, -6, 0, 6, 12, 18];
+const CONVEYOR_SPEED = 5.8;
+const CONVEYOR_HALF_X = 2.1;
+const CONVEYOR_HALF_Y = 0.5;
+const CONVEYOR_LONG_HALF_Z = 4;
+const CONVEYOR_SHORT_HALF_Z = 2;
+const CONVEYOR_Y = -1;
+const CONVEYOR_CENTER_Y = -0.5;
+const LEFT_BELT_X = -5.1;
+const RIGHT_BELT_X = 5.1;
+const RAMP_RUN = 6;
+const RAMP_RISE = SECOND_STORY_TOP - FLOOR_TOP;
+const RAMP_LENGTH = Math.hypot(RAMP_RUN, RAMP_RISE);
+const RAMP_ANGLE = Math.atan2(RAMP_RISE, RAMP_RUN);
+const RAMP_HALF_EXTENTS: Vec3 = [2, 0.22, RAMP_LENGTH / 2];
 const Y_AXIS: Vec3 = [0, 1, 0];
-const tmpQuat = quat.create();
-const tmpPos: Vec3 = [0, 0, 0];
 
 export async function createArena(world: World, layers: PhysicsLayers, scene: THREE.Scene): Promise<Arena> {
   const entities: PhysicsEntity[] = [];
-  const sliders: Slider[] = [];
-  const spinnerArms: SpinnerArm[] = [];
 
   addLighting(scene);
   addSky(scene);
 
   const assets = await loadArenaAssets();
-
-  buildPlatformField(world, layers, scene, assets);
+  buildFloorPlan(world, layers, scene, assets);
+  buildConveyors(world, layers, scene, assets);
   buildBoundaryWalls(world, layers, scene, assets);
-  buildFutureGoalMouths(world, layers, scene, assets);
-  buildKinematicToys(world, layers, scene, assets, entities, sliders, spinnerArms);
+  buildRaisedDecks(world, layers, scene, assets);
+  buildBaseDecor(scene, assets);
 
   return {
     entities,
-    update(time: number, dt: number) {
-      for (const slider of sliders) {
-        const offset = Math.sin(time * slider.speed + slider.phase) * slider.amplitude;
-        tmpPos[0] = slider.base[0] + (slider.axis === "x" ? offset : 0);
-        tmpPos[1] = slider.base[1];
-        tmpPos[2] = slider.base[2] + (slider.axis === "z" ? offset : 0);
-        quat.setAxisAngle(tmpQuat, Y_AXIS, slider.yaw);
-        rigidBody.moveKinematic(slider.body, tmpPos, tmpQuat, dt);
-      }
-
-      for (const arm of spinnerArms) {
-        quat.setAxisAngle(tmpQuat, Y_AXIS, time * 1.15 + arm.yawOffset);
-        rigidBody.moveKinematic(arm.body, [0, 1, 11], tmpQuat, dt);
-      }
+    listener: createConveyorListener(),
+    update() {
+      // Static arena; conveyor motion is applied through the physics contact listener.
     },
   };
 }
@@ -92,212 +103,352 @@ async function loadArenaAssets(): Promise<ArenaAssets> {
     platform6x6x4,
     platform6x6x4Blue,
     platform6x6x4Red,
-    barrierTall,
-    barrierLow,
+    barrierTallBlue,
+    barrierTallRed,
+    barrierLowBlue,
+    barrierLowRed,
+    conveyorLongBlue,
+    conveyorLongRed,
+    conveyorShortBlue,
+    conveyorShortRed,
+    rampBlue,
+    rampRed,
+    flagBlue,
+    flagRed,
+    archWideBlue,
+    archWideRed,
+    safetyNetBlue,
+    safetyNetRed,
+    pipeStraightBlue,
+    pipeStraightRed,
   ] = await Promise.all([
     loadGltfMesh(ASSETS.platform_yellow),
     loadGltfMesh(ASSETS.platform_blue),
     loadGltfMesh(ASSETS.platform_red),
+    loadGltfMesh(ASSETS.barrier_tall_blue),
     loadGltfMesh(ASSETS.barrier_tall),
+    loadGltfMesh(ASSETS.barrier_low_blue),
     loadGltfMesh(ASSETS.barrier_low),
+    loadModel(ASSETS.conveyor_4x8x1_blue),
+    loadModel(ASSETS.conveyor_4x8x1_red),
+    loadModel(ASSETS.conveyor_4x4x1_blue),
+    loadModel(ASSETS.conveyor_4x4x1_red),
+    loadModel(ASSETS.platform_slope_4x6x4_blue),
+    loadModel(ASSETS.platform_slope_4x6x4_red),
+    loadModel(ASSETS.flag_blue),
+    loadModel(ASSETS.flag_red),
+    loadModel(ASSETS.arch_wide_blue),
+    loadModel(ASSETS.arch_wide_red),
+    loadModel(ASSETS.safetynet_6x2x1_blue),
+    loadModel(ASSETS.safetynet_6x2x1_red),
+    loadModel(ASSETS.pipe_straight_blue),
+    loadModel(ASSETS.pipe_straight_red),
   ]);
 
   return {
     platform6x6x4,
-    platform6x6x4Blue,
-    platform6x6x4Red,
-    barrierTall,
-    barrierLow,
+    blue: {
+      platform6x6x4: platform6x6x4Blue,
+      barrierTall: barrierTallBlue,
+      barrierLow: barrierLowBlue,
+      conveyorLong: conveyorLongBlue,
+      conveyorShort: conveyorShortBlue,
+      ramp: rampBlue,
+      flag: flagBlue,
+      archWide: archWideBlue,
+      safetyNet: safetyNetBlue,
+      pipeStraight: pipeStraightBlue,
+    },
+    red: {
+      platform6x6x4: platform6x6x4Red,
+      barrierTall: barrierTallRed,
+      barrierLow: barrierLowRed,
+      conveyorLong: conveyorLongRed,
+      conveyorShort: conveyorShortRed,
+      ramp: rampRed,
+      flag: flagRed,
+      archWide: archWideRed,
+      safetyNet: safetyNetRed,
+      pipeStraight: pipeStraightRed,
+    },
   };
 }
 
-function buildPlatformField(world: World, layers: PhysicsLayers, scene: THREE.Scene, assets: ArenaAssets) {
-  staticBox(world, layers.terrain, [FIELD_HALF_X, PLATFORM_HEIGHT / 2, FIELD_HALF_Z], [0, -2, 0], {
-    friction: 1.8,
-    restitution: 0.06,
+async function loadModel(path: string) {
+  const model = await loadGltfScene(path);
+  model.traverse((node) => {
+    if (node instanceof THREE.Mesh) {
+      node.castShadow = true;
+      node.receiveShadow = true;
+    }
   });
+  return model;
+}
 
+function buildFloorPlan(world: World, layers: PhysicsLayers, scene: THREE.Scene, assets: ArenaAssets) {
   const yellowTiles: TileTransform[] = [];
   const blueTiles: TileTransform[] = [];
   const redTiles: TileTransform[] = [];
 
-  for (let x = -21; x <= 21; x += 6) {
-    for (let z = -18; z <= 18; z += 6) {
-      const top = raisedFieldTops.get(`${x},${z}`) ?? 0;
-      const tile: TileTransform = { x, y: top > 0 ? top - PLATFORM_HEIGHT : PLATFORM_BASE_Y, z };
-      if (top > 0) {
-        staticBox(world, layers.terrain, [3, PLATFORM_HEIGHT / 2, 3], [x, top - PLATFORM_HEIGHT / 2, z], {
-          friction: 1.35,
-          restitution: 0.08,
-        });
-      }
-
-      if (z <= -12) {
-        blueTiles.push(tile);
-      } else if (z >= 12) {
-        redTiles.push(tile);
-      } else {
-        yellowTiles.push(tile);
-      }
+  for (const x of BASE_XS) {
+    for (const z of BLUE_BASE_ZS) {
+      addPlatformTile(world, layers, blueTiles, x, z, FLOOR_TOP);
+    }
+    for (const z of RED_BASE_ZS) {
+      addPlatformTile(world, layers, redTiles, x, z, FLOOR_TOP);
     }
   }
+
+  for (const z of CORRIDOR_ZS) {
+    const tiles = z < 0 ? blueTiles : z > 0 ? redTiles : yellowTiles;
+    addPlatformTile(world, layers, tiles, 0, z, FLOOR_TOP);
+  }
+
   addTiles(scene, assets.platform6x6x4, yellowTiles);
-  addTiles(scene, assets.platform6x6x4Blue, blueTiles);
-  addTiles(scene, assets.platform6x6x4Red, redTiles);
+  addTiles(scene, assets.blue.platform6x6x4, blueTiles);
+  addTiles(scene, assets.red.platform6x6x4, redTiles);
+}
+
+function buildConveyors(world: World, layers: PhysicsLayers, scene: THREE.Scene, assets: ArenaAssets) {
+  const beltLanes = [
+    { x: LEFT_BELT_X, ry: Math.PI, velocity: [0, 0, CONVEYOR_SPEED] as Vec3 },
+    { x: RIGHT_BELT_X, ry: 0, velocity: [0, 0, -CONVEYOR_SPEED] as Vec3 },
+  ];
+
+  for (const lane of beltLanes) {
+    for (const z of [-16, -8]) {
+      addConveyorSegment(world, layers, scene, assets.blue.conveyorLong, lane.x, z, lane.ry, CONVEYOR_LONG_HALF_Z, lane.velocity);
+    }
+    addConveyorSegment(world, layers, scene, assets.blue.conveyorShort, lane.x, -2, lane.ry, CONVEYOR_SHORT_HALF_Z, lane.velocity);
+
+    addConveyorSegment(world, layers, scene, assets.red.conveyorShort, lane.x, 2, lane.ry, CONVEYOR_SHORT_HALF_Z, lane.velocity);
+    for (const z of [8, 16]) {
+      addConveyorSegment(world, layers, scene, assets.red.conveyorLong, lane.x, z, lane.ry, CONVEYOR_LONG_HALF_Z, lane.velocity);
+    }
+  }
+}
+
+function addConveyorSegment(
+  world: World,
+  layers: PhysicsLayers,
+  scene: THREE.Scene,
+  model: THREE.Group,
+  x: number,
+  z: number,
+  ry: number,
+  halfZ: number,
+  velocity: Vec3,
+) {
+  addModelInstances(scene, model, [{ x, y: CONVEYOR_Y, z, ry }]);
+  staticBox(world, layers.terrain, [CONVEYOR_HALF_X, CONVEYOR_HALF_Y, halfZ], [x, CONVEYOR_CENTER_Y, z], {
+    quaternion: yawQuat(ry),
+    friction: 2.8,
+    restitution: 0.02,
+    userData: { conveyorVelocity: velocity } satisfies ConveyorUserData,
+  });
 }
 
 function buildBoundaryWalls(world: World, layers: PhysicsLayers, scene: THREE.Scene, assets: ArenaAssets) {
-  staticBox(world, layers.terrain, [0.55, 2, FIELD_HALF_Z + 1], [-FIELD_HALF_X - 0.55, 2, 0], {
-    friction: 0.75,
-    restitution: 0.35,
-  });
-  staticBox(world, layers.terrain, [0.55, 2, FIELD_HALF_Z + 1], [FIELD_HALF_X + 0.55, 2, 0], {
-    friction: 0.75,
-    restitution: 0.35,
-  });
-  staticBox(world, layers.terrain, [FIELD_HALF_X + 0.7, 2, 0.55], [0, 2, -FIELD_HALF_Z - 0.55], {
-    friction: 0.75,
-    restitution: 0.35,
-  });
-  staticBox(world, layers.terrain, [FIELD_HALF_X + 0.7, 2, 0.55], [0, 2, FIELD_HALF_Z + 0.55], {
-    friction: 0.75,
-    restitution: 0.35,
-  });
+  const blueTall: BarrierPlacement[] = [];
+  const redTall: BarrierPlacement[] = [];
 
-  const wallTiles: TileTransform[] = [];
-  for (let z = -20; z <= 20; z += 4) {
-    wallTiles.push({ x: -FIELD_HALF_X - 0.55, y: 0, z, ry: Math.PI / 2 });
-    wallTiles.push({ x: FIELD_HALF_X + 0.55, y: 0, z, ry: Math.PI / 2 });
+  for (const x of [-18, -14, -10, -6, -2, 2, 6, 10, 14, 18]) {
+    addBarrier(world, layers, blueTall, x, 0, -45.5, 0, 4);
+    addBarrier(world, layers, redTall, x, 0, 45.5, 0, 4);
   }
-  for (let x = -22; x <= 22; x += 4) {
-    wallTiles.push({ x, y: 0, z: -FIELD_HALF_Z - 0.55 });
-    wallTiles.push({ x, y: 0, z: FIELD_HALF_Z + 0.55 });
+
+  for (const z of [-44, -40, -36, -32, -28, -24]) {
+    addBarrier(world, layers, blueTall, -21.5, 0, z, Math.PI / 2, 4);
+    addBarrier(world, layers, blueTall, 21.5, 0, z, Math.PI / 2, 4);
   }
-  addTiles(scene, assets.barrierTall, wallTiles);
+
+  for (const z of [24, 28, 32, 36, 40, 44]) {
+    addBarrier(world, layers, redTall, -21.5, 0, z, Math.PI / 2, 4);
+    addBarrier(world, layers, redTall, 21.5, 0, z, Math.PI / 2, 4);
+  }
+
+  for (const x of [-18, -14, 14, 18]) {
+    addBarrier(world, layers, blueTall, x, 0, -21.5, 0, 4);
+    addBarrier(world, layers, redTall, x, 0, 21.5, 0, 4);
+  }
+
+  for (const z of [-18, -14, -10, -6, -2]) {
+    addBarrier(world, layers, blueTall, -9.5, 0, z, Math.PI / 2, 4);
+    addBarrier(world, layers, blueTall, 9.5, 0, z, Math.PI / 2, 4);
+  }
+
+  for (const z of [2, 6, 10, 14, 18]) {
+    addBarrier(world, layers, redTall, -9.5, 0, z, Math.PI / 2, 4);
+    addBarrier(world, layers, redTall, 9.5, 0, z, Math.PI / 2, 4);
+  }
+
+  addTiles(scene, assets.blue.barrierTall, blueTall);
+  addTiles(scene, assets.red.barrierTall, redTall);
 }
 
+function buildRaisedDecks(world: World, layers: PhysicsLayers, scene: THREE.Scene, assets: ArenaAssets) {
+  const blueDeckTiles: TileTransform[] = [];
+  const redDeckTiles: TileTransform[] = [];
+  const blueLowBarriers: BarrierPlacement[] = [];
+  const redLowBarriers: BarrierPlacement[] = [];
 
-function buildFutureGoalMouths(world: World, layers: PhysicsLayers, scene: THREE.Scene, assets: ArenaAssets) {
-  const sideBarriers: TileTransform[] = [
-    { x: -8, y: 0, z: -18.5 },
-    { x: 8, y: 0, z: -18.5 },
-    { x: -8, y: 0, z: 18.5 },
-    { x: 8, y: 0, z: 18.5 },
-    { x: -10.5, y: 0, z: -16, ry: Math.PI / 2 },
-    { x: 10.5, y: 0, z: -16, ry: Math.PI / 2 },
-    { x: -10.5, y: 0, z: 16, ry: Math.PI / 2 },
-    { x: 10.5, y: 0, z: 16, ry: Math.PI / 2 },
-  ];
-
-  for (const barrier of sideBarriers) {
-    staticBox(world, layers.terrain, [2, 1, 0.5], [barrier.x, 1, barrier.z], {
-      quaternion: yawQuat(barrier.ry ?? 0),
-      friction: 0.8,
-      restitution: 0.32,
-    });
+  for (const x of [-12, -6]) {
+    for (const z of [34, 40]) {
+      addPlatformTile(world, layers, redDeckTiles, x, z, SECOND_STORY_TOP);
+    }
   }
-  addTiles(scene, assets.barrierLow, sideBarriers);
+  for (const x of [6, 12]) {
+    for (const z of [-34, -40]) {
+      addPlatformTile(world, layers, blueDeckTiles, x, z, SECOND_STORY_TOP);
+    }
+  }
+
+  addRamp(world, layers, scene, assets.red.ramp, -9, 28, Math.PI, 1);
+  addRamp(world, layers, scene, assets.blue.ramp, 9, -28, 0, -1);
+
+  for (const x of [-13, -9, -5]) {
+    addBarrier(world, layers, redLowBarriers, x, SECOND_STORY_TOP, 43.5, 0, 2);
+  }
+  for (const z of [35, 39]) {
+    addBarrier(world, layers, redLowBarriers, -15.5, SECOND_STORY_TOP, z, Math.PI / 2, 2);
+    addBarrier(world, layers, redLowBarriers, -2.5, SECOND_STORY_TOP, z, Math.PI / 2, 2);
+  }
+
+  for (const x of [5, 9, 13]) {
+    addBarrier(world, layers, blueLowBarriers, x, SECOND_STORY_TOP, -43.5, 0, 2);
+  }
+  for (const z of [-35, -39]) {
+    addBarrier(world, layers, blueLowBarriers, 15.5, SECOND_STORY_TOP, z, Math.PI / 2, 2);
+    addBarrier(world, layers, blueLowBarriers, 2.5, SECOND_STORY_TOP, z, Math.PI / 2, 2);
+  }
+
+  addTiles(scene, assets.red.platform6x6x4, redDeckTiles);
+  addTiles(scene, assets.blue.platform6x6x4, blueDeckTiles);
+  addTiles(scene, assets.red.barrierLow, redLowBarriers);
+  addTiles(scene, assets.blue.barrierLow, blueLowBarriers);
+
+  addModelInstances(scene, assets.red.safetyNet, [
+    { x: -9, y: SECOND_STORY_TOP, z: 43.9 },
+    { x: -15.9, y: SECOND_STORY_TOP, z: 37, ry: Math.PI / 2 },
+  ]);
+  addModelInstances(scene, assets.blue.safetyNet, [
+    { x: 9, y: SECOND_STORY_TOP, z: -43.9, ry: Math.PI },
+    { x: 15.9, y: SECOND_STORY_TOP, z: -37, ry: Math.PI / 2 },
+  ]);
 }
 
-function buildKinematicToys(
+function addRamp(
   world: World,
   layers: PhysicsLayers,
   scene: THREE.Scene,
-  assets: ArenaAssets,
-  entities: PhysicsEntity[],
-  sliders: Slider[],
-  spinnerArms: SpinnerArm[],
+  model: THREE.Group,
+  x: number,
+  z: number,
+  visualYaw: number,
+  riseDirectionZ: 1 | -1,
 ) {
-  sliders.push(createSlidingBarrier(world, layers, scene, assets.barrierLow, entities, {
-    base: [0, 1, -12],
-    axis: "x",
-    amplitude: 8,
-    speed: 0.75,
-    phase: 0,
-    yaw: 0,
-  }));
-
-  sliders.push(createSlidingBarrier(world, layers, scene, assets.barrierLow, entities, {
-    base: [-18, 1, 6],
-    axis: "z",
-    amplitude: 4.5,
-    speed: 0.95,
-    phase: Math.PI / 2,
-    yaw: Math.PI / 2,
-  }));
-
-  spinnerArms.push(createSpinnerArm(world, layers, scene, assets.barrierLow, entities, 0));
-  spinnerArms.push(createSpinnerArm(world, layers, scene, assets.barrierLow, entities, Math.PI / 2));
-
-  const hub = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.75, 0.9, 1.2, 24),
-    new THREE.MeshStandardMaterial({ color: 0xffd23f, roughness: 0.42 }),
-  );
-  hub.position.set(0, 0.6, 11);
-  hub.castShadow = true;
-  hub.receiveShadow = true;
-  scene.add(hub);
+  addModelInstances(scene, model, [{ x, y: 0, z, ry: visualYaw }]);
+  staticBox(world, layers.terrain, RAMP_HALF_EXTENTS, [x, SECOND_STORY_TOP / 2, z], {
+    quaternion: quatFromEuler(riseDirectionZ === 1 ? -RAMP_ANGLE : RAMP_ANGLE),
+    friction: 1.35,
+    restitution: 0.04,
+  });
 }
 
-function createSlidingBarrier(
-  world: World,
-  layers: PhysicsLayers,
-  scene: THREE.Scene,
-  mesh: GltfMesh,
-  entities: PhysicsEntity[],
-  config: SliderConfig,
-): Slider {
-  const bodyQuat = yawQuat(config.yaw);
-  const body = rigidBody.create(world, {
-    shape: box.create({ halfExtents: [2, 1, 0.5] }),
-    motionType: MotionType.KINEMATIC,
-    objectLayer: layers.kinematic,
-    position: config.base,
-    quaternion: bodyQuat,
-    friction: 0.5,
-    restitution: 0.55,
-  });
+function buildBaseDecor(scene: THREE.Scene, assets: ArenaAssets) {
+  addModelInstances(scene, assets.red.flag, [{ x: 0, y: 0, z: 39, ry: Math.PI }]);
+  addModelInstances(scene, assets.blue.flag, [{ x: 0, y: 0, z: -39 }]);
 
-  const object = new THREE.Group();
-  object.add(buildInstancedMesh(mesh, [{ x: 0, y: -1, z: 0 }]));
-  object.position.set(config.base[0], config.base[1], config.base[2]);
-  object.quaternion.set(bodyQuat[0], bodyQuat[1], bodyQuat[2], bodyQuat[3]);
-  scene.add(object);
-  entities.push({ body, object });
+  addModelInstances(scene, assets.red.archWide, [{ x: 0, y: 0, z: 21.2, ry: Math.PI }]);
+  addModelInstances(scene, assets.blue.archWide, [{ x: 0, y: 0, z: -21.2 }]);
 
-  return { ...config, body };
+  addModelInstances(scene, assets.red.pipeStraight, [
+    { x: 18, y: 0, z: 30 },
+    { x: 18, y: 0, z: 38 },
+  ]);
+  addModelInstances(scene, assets.blue.pipeStraight, [
+    { x: -18, y: 0, z: -30 },
+    { x: -18, y: 0, z: -38 },
+  ]);
 }
 
-function createSpinnerArm(
+function addPlatformTile(
   world: World,
   layers: PhysicsLayers,
-  scene: THREE.Scene,
-  mesh: GltfMesh,
-  entities: PhysicsEntity[],
-  yawOffset: number,
-): SpinnerArm {
-  const bodyQuat = yawQuat(yawOffset);
-  const body = rigidBody.create(world, {
-    shape: box.create({ halfExtents: [4.1, 1, 0.5] }),
-    motionType: MotionType.KINEMATIC,
-    objectLayer: layers.kinematic,
-    position: [0, 1, 11],
-    quaternion: bodyQuat,
-    friction: 0.35,
-    restitution: 0.65,
+  tiles: TileTransform[],
+  x: number,
+  z: number,
+  top: number,
+) {
+  tiles.push({ x, y: top - PLATFORM_HEIGHT, z });
+  staticBox(world, layers.terrain, [3, PLATFORM_HEIGHT / 2, 3], [x, top - PLATFORM_HEIGHT / 2, z], {
+    friction: 1.45,
+    restitution: 0.06,
   });
+}
 
-  const object = new THREE.Group();
-  object.add(buildInstancedMesh(mesh, [
-    { x: -2, y: -1, z: 0 },
-    { x: 2, y: -1, z: 0 },
-  ]));
-  object.position.set(0, 1, 11);
-  object.quaternion.set(bodyQuat[0], bodyQuat[1], bodyQuat[2], bodyQuat[3]);
-  scene.add(object);
-  entities.push({ body, object });
+function addBarrier(
+  world: World,
+  layers: PhysicsLayers,
+  tiles: BarrierPlacement[],
+  x: number,
+  y: number,
+  z: number,
+  ry: number,
+  height: number,
+) {
+  tiles.push({ x, y, z, ry, height });
+  staticBox(world, layers.terrain, [2, height / 2, 0.5], [x, y + height / 2, z], {
+    quaternion: yawQuat(ry),
+    friction: 0.75,
+    restitution: 0.35,
+  });
+}
 
-  return { body, yawOffset };
+function addModelInstances(scene: THREE.Scene, source: THREE.Group, placements: ModelTransform[]) {
+  for (const placement of placements) {
+    const object = source.clone(true);
+    object.position.set(placement.x, placement.y, placement.z);
+    object.rotation.set(placement.rx ?? 0, placement.ry ?? 0, placement.rz ?? 0);
+    if (placement.scale !== undefined) {
+      object.scale.setScalar(placement.scale);
+    }
+    scene.add(object);
+  }
+}
+
+function createConveyorListener(): Listener {
+  const applyConveyorContact = (bodyA: RigidBody, bodyB: RigidBody, _manifold: unknown, settings: ContactSettings) => {
+    const velocityA = getConveyorVelocity(bodyA);
+    const velocityB = getConveyorVelocity(bodyB);
+
+    if (!velocityA && !velocityB) {
+      return;
+    }
+
+    settings.combinedFriction = Math.max(settings.combinedFriction, 3.5);
+
+    if (velocityA) {
+      settings.relativeLinearSurfaceVelocity[0] -= velocityA[0];
+      settings.relativeLinearSurfaceVelocity[1] -= velocityA[1];
+      settings.relativeLinearSurfaceVelocity[2] -= velocityA[2];
+    }
+    if (velocityB) {
+      settings.relativeLinearSurfaceVelocity[0] += velocityB[0];
+      settings.relativeLinearSurfaceVelocity[1] += velocityB[1];
+      settings.relativeLinearSurfaceVelocity[2] += velocityB[2];
+    }
+  };
+
+  return {
+    onContactAdded: applyConveyorContact,
+    onContactPersisted: applyConveyorContact,
+  };
+}
+
+function getConveyorVelocity(body: RigidBody): Vec3 | null {
+  const userData = body.userData as Partial<ConveyorUserData> | null;
+  return userData?.conveyorVelocity ?? null;
 }
 
 function addTiles(scene: THREE.Scene, mesh: GltfMesh, tiles: TileTransform[]) {
@@ -312,7 +463,7 @@ function staticBox(
   layer: number,
   halfExtents: Vec3,
   position: Vec3,
-  options: { quaternion?: Quat; friction?: number; restitution?: number } = {},
+  options: { quaternion?: Quat; friction?: number; restitution?: number; userData?: unknown } = {},
 ) {
   return rigidBody.create(world, {
     shape: box.create({ halfExtents }),
@@ -322,6 +473,7 @@ function staticBox(
     quaternion: options.quaternion,
     friction: options.friction ?? 1,
     restitution: options.restitution ?? 0.08,
+    userData: options.userData,
   });
 }
 
@@ -331,31 +483,36 @@ function yawQuat(yaw: number): Quat {
   return out;
 }
 
+function quatFromEuler(rx: number, ry = 0, rz = 0): Quat {
+  const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz));
+  return [q.x, q.y, q.z, q.w];
+}
+
 function addLighting(scene: THREE.Scene) {
-  scene.add(new THREE.HemisphereLight(0xdaf4ff, 0x564b8a, 2.));
+  scene.add(new THREE.HemisphereLight(0xdaf4ff, 0x564b8a, 2.0));
 
   const sun = new THREE.DirectionalLight(0xffffff, 1.5);
-  sun.position.set(18, 24, 12);
+  sun.position.set(24, 32, 22);
   sun.castShadow = true;
   sun.shadow.mapSize.setScalar(2048);
   sun.shadow.camera.near = 0.5;
-  sun.shadow.camera.far = 95;
-  sun.shadow.camera.left = -48;
-  sun.shadow.camera.right = 48;
-  sun.shadow.camera.top = 48;
-  sun.shadow.camera.bottom = -48;
+  sun.shadow.camera.far = 130;
+  sun.shadow.camera.left = -58;
+  sun.shadow.camera.right = 58;
+  sun.shadow.camera.top = 68;
+  sun.shadow.camera.bottom = -68;
   scene.add(sun);
 }
 
 function addSky(scene: THREE.Scene) {
   scene.background = new THREE.Color(0x60cfff);
-  scene.fog = new THREE.Fog(0x60cfff, 72, 140);
+  scene.fog = new THREE.Fog(0x60cfff, 90, 180);
 
   const rim = new THREE.Mesh(
-    new THREE.TorusGeometry(48, 0.16, 8, 160),
+    new THREE.TorusGeometry(72, 0.16, 8, 192),
     new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.28 }),
   );
-  rim.position.set(0, 9, 0);
+  rim.position.set(0, 10, 0);
   rim.rotation.x = Math.PI / 2;
   scene.add(rim);
 }

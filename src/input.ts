@@ -18,16 +18,14 @@ export class InputController {
   private hasPointerPosition = false;
   private yawDelta = 0;
   private pitchDelta = 0;
-  private pointerLocked = false;
 
   constructor(private readonly target: HTMLElement) {
     window.addEventListener("keydown", (event) => this.handleKeyDown(event));
     window.addEventListener("keyup", (event) => this.keys.delete(event.code));
     document.addEventListener("pointerlockchange", () => this.handlePointerLockChange());
     target.addEventListener("pointerdown", (event) => this.handlePointerDown(event));
-    target.addEventListener("pointermove", (event) => this.handlePointerMove(event));
-    target.addEventListener("pointerup", (event) => this.handlePointerUp(event));
-    target.addEventListener("pointercancel", (event) => this.handlePointerUp(event));
+    // mousemove instead of pointermove: Firefox doesn't set movementX/Y on PointerEvent under pointer lock.
+    window.addEventListener("mousemove", (event) => this.handlePointerMove(event));
     window.addEventListener("pointerup", (event) => this.handlePointerUp(event));
     window.addEventListener("pointercancel", (event) => this.handlePointerUp(event));
     target.addEventListener("contextmenu", (event) => event.preventDefault());
@@ -81,7 +79,7 @@ export class InputController {
   }
 
   getPointerPosition() {
-    if (this.pointerLocked) {
+    if (document.pointerLockElement === this.target) {
       return {
         x: window.innerWidth / 2,
         y: window.innerHeight / 2,
@@ -119,10 +117,6 @@ export class InputController {
       this.target.requestPointerLock();
     }
 
-    if (document.pointerLockElement !== this.target) {
-      this.target.setPointerCapture(event.pointerId);
-    }
-
     this.pointerX = event.clientX;
     this.pointerY = event.clientY;
     this.hasPointerPosition = true;
@@ -132,8 +126,8 @@ export class InputController {
     }
   }
 
-  private handlePointerMove(event: PointerEvent) {
-    if (this.pointerLocked) {
+  private handlePointerMove(event: MouseEvent) {
+    if (document.pointerLockElement === this.target) {
       this.yawDelta += event.movementX;
       this.pitchDelta += event.movementY;
       return;
@@ -156,14 +150,9 @@ export class InputController {
     if (event.button === 0) {
       this.throwReleased = true;
     }
-
-    if (this.target.hasPointerCapture(event.pointerId)) {
-      this.target.releasePointerCapture(event.pointerId);
-    }
   }
 
   private handlePointerLockChange() {
-    this.pointerLocked = document.pointerLockElement === this.target;
     this.pointerX = window.innerWidth / 2;
     this.pointerY = window.innerHeight / 2;
     this.hasPointerPosition = true;

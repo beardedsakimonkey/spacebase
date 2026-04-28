@@ -9,12 +9,11 @@ import {
 import type { Quat, Vec3 } from "mathcat";
 import { quat } from "mathcat";
 import * as THREE from "three";
-import { ASSETS } from "./assets";
+import { platformerAsset } from "./assets";
 import {
   addConveyorSegment,
   animateConveyorTextures,
   CONVEYOR_LONG_HALF_Z,
-  CONVEYOR_SHORT_HALF_Z,
   CONVEYOR_SPEED,
   createConveyorListener,
   loadConveyorModel,
@@ -33,12 +32,10 @@ type TeamAssets = {
   barrierTall: GltfMesh;
   barrierLow: GltfMesh;
   conveyorLong: THREE.Group;
-  conveyorShort: THREE.Group;
   ramp: THREE.Group;
   flag: THREE.Group;
   archWide: THREE.Group;
   safetyNet: THREE.Group;
-  pipeStraight: THREE.Group;
 };
 
 type ArenaAssets = {
@@ -115,8 +112,6 @@ async function loadArenaAssets(): Promise<ArenaAssets> {
     barrierLowRed,
     conveyorLongBlue,
     conveyorLongRed,
-    conveyorShortBlue,
-    conveyorShortRed,
     rampBlue,
     rampRed,
     flagBlue,
@@ -125,30 +120,24 @@ async function loadArenaAssets(): Promise<ArenaAssets> {
     archWideRed,
     safetyNetBlue,
     safetyNetRed,
-    pipeStraightBlue,
-    pipeStraightRed,
   ] = await Promise.all([
-    loadGltfMesh(ASSETS.platform_yellow),
-    loadGltfMesh(ASSETS.platform_blue),
-    loadGltfMesh(ASSETS.platform_red),
-    loadGltfMesh(ASSETS.barrier_tall_blue),
-    loadGltfMesh(ASSETS.barrier_tall),
-    loadGltfMesh(ASSETS.barrier_low_blue),
-    loadGltfMesh(ASSETS.barrier_low),
-    loadConveyorModel(ASSETS.conveyor_4x8x1_blue),
-    loadConveyorModel(ASSETS.conveyor_4x8x1_red),
-    loadConveyorModel(ASSETS.conveyor_4x4x1_blue),
-    loadConveyorModel(ASSETS.conveyor_4x4x1_red),
-    loadModel(ASSETS.platform_slope_4x6x4_blue),
-    loadModel(ASSETS.platform_slope_4x6x4_red),
-    loadModel(ASSETS.flag_blue),
-    loadModel(ASSETS.flag_red),
-    loadModel(ASSETS.arch_wide_blue),
-    loadModel(ASSETS.arch_wide_red),
-    loadModel(ASSETS.safetynet_6x2x1_blue),
-    loadModel(ASSETS.safetynet_6x2x1_red),
-    loadModel(ASSETS.pipe_straight_blue),
-    loadModel(ASSETS.pipe_straight_red),
+    loadGltfMesh(platformerAsset("yellow", "platform_6x6x4")),
+    loadGltfMesh(platformerAsset("blue", "platform_6x6x4")),
+    loadGltfMesh(platformerAsset("red", "platform_6x6x4")),
+    loadGltfMesh(platformerAsset("blue", "barrier_4x1x4")),
+    loadGltfMesh(platformerAsset("red", "barrier_4x1x4")),
+    loadGltfMesh(platformerAsset("blue", "barrier_4x1x2")),
+    loadGltfMesh(platformerAsset("red", "barrier_4x1x2")),
+    loadConveyorModel(platformerAsset("blue", "conveyor_4x8x1")),
+    loadConveyorModel(platformerAsset("red", "conveyor_4x8x1")),
+    loadModel(platformerAsset("blue", "platform_slope_4x6x4")),
+    loadModel(platformerAsset("red", "platform_slope_4x6x4")),
+    loadModel(platformerAsset("blue", "flag_C")),
+    loadModel(platformerAsset("red", "flag_C")),
+    loadModel(platformerAsset("blue", "arch_wide")),
+    loadModel(platformerAsset("red", "arch_wide")),
+    loadModel(platformerAsset("blue", "safetynet_6x2x1")),
+    loadModel(platformerAsset("red", "safetynet_6x2x1")),
   ]);
 
   return {
@@ -158,30 +147,24 @@ async function loadArenaAssets(): Promise<ArenaAssets> {
       barrierTall: barrierTallBlue,
       barrierLow: barrierLowBlue,
       conveyorLong: conveyorLongBlue.model,
-      conveyorShort: conveyorShortBlue.model,
       ramp: rampBlue,
       flag: flagBlue,
       archWide: archWideBlue,
       safetyNet: safetyNetBlue,
-      pipeStraight: pipeStraightBlue,
     },
     red: {
       platform6x6x4: platform6x6x4Red,
       barrierTall: barrierTallRed,
       barrierLow: barrierLowRed,
       conveyorLong: conveyorLongRed.model,
-      conveyorShort: conveyorShortRed.model,
       ramp: rampRed,
       flag: flagRed,
       archWide: archWideRed,
       safetyNet: safetyNetRed,
-      pipeStraight: pipeStraightRed,
     },
     conveyorTextures: [
       ...conveyorLongBlue.textures,
       ...conveyorLongRed.textures,
-      ...conveyorShortBlue.textures,
-      ...conveyorShortRed.textures,
     ],
   };
 }
@@ -231,9 +214,7 @@ function buildConveyors(world: World, layers: PhysicsLayers, scene: THREE.Scene,
     for (const z of [-16, -8]) {
       addConveyorSegment(world, layers, scene, assets.blue.conveyorLong, lane.x, z, lane.ry, CONVEYOR_LONG_HALF_Z, lane.velocity);
     }
-    addConveyorSegment(world, layers, scene, assets.blue.conveyorShort, lane.x, -2, lane.ry, CONVEYOR_SHORT_HALF_Z, lane.velocity);
 
-    addConveyorSegment(world, layers, scene, assets.red.conveyorShort, lane.x, 2, lane.ry, CONVEYOR_SHORT_HALF_Z, lane.velocity);
     for (const z of [8, 16]) {
       addConveyorSegment(world, layers, scene, assets.red.conveyorLong, lane.x, z, lane.ry, CONVEYOR_LONG_HALF_Z, lane.velocity);
     }
@@ -351,20 +332,11 @@ function addRamp(
 }
 
 function buildBaseDecor(scene: THREE.Scene, assets: ArenaAssets) {
-  addModelInstances(scene, assets.red.flag, [{ x: 0, y: 0, z: 39, ry: Math.PI }]);
-  addModelInstances(scene, assets.blue.flag, [{ x: 0, y: 0, z: -39 }]);
+  addModelInstances(scene, assets.red.flag, [{ x: 0, y: 0, z: 39, ry: Math.PI * 1.5 }]);
+  addModelInstances(scene, assets.blue.flag, [{ x: 0, y: 0, z: -39, ry: Math.PI / 2 }]);
 
   addModelInstances(scene, assets.red.archWide, [{ x: 0, y: 0, z: 21.2, ry: Math.PI }]);
   addModelInstances(scene, assets.blue.archWide, [{ x: 0, y: 0, z: -21.2 }]);
-
-  addModelInstances(scene, assets.red.pipeStraight, [
-    { x: 18, y: 0, z: 30 },
-    { x: 18, y: 0, z: 38 },
-  ]);
-  addModelInstances(scene, assets.blue.pipeStraight, [
-    { x: -18, y: 0, z: -30 },
-    { x: -18, y: 0, z: -38 },
-  ]);
 }
 
 function addPlatformTile(

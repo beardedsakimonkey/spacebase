@@ -1,7 +1,7 @@
 import { rigidBody, sphere, MotionQuality, MotionType, type RigidBody, type World } from "crashcat";
 import type { Vec3 } from "mathcat";
 import * as THREE from "three";
-import { ASSETS } from "./assets";
+import { platformerNeutralAsset } from "./assets";
 import { loadGltfScene } from "./kaykit";
 import type { PhysicsLayers } from "./physics";
 import type { PlayerController } from "./player";
@@ -21,7 +21,7 @@ export type BallTelemetry = {
   distance: number;
 };
 
-const spawnPosition: Vec3 = [3.5, 1.8, -2.5];
+const spawnPosition: Vec3 = [0, 1.8, -2.5];
 const ballVelocity: Vec3 = [0, 0, 0];
 const zeroAngular: Vec3 = [0, 0, 0];
 const launchDirection = new THREE.Vector3();
@@ -72,7 +72,7 @@ export class BallController {
     this.object = new THREE.Group();
     scene.add(this.object);
 
-    loadGltfScene(ASSETS.ball).then((model) => {
+    loadGltfScene(platformerNeutralAsset("ball")).then((model) => {
       // KayKit ball is radius 1; scale to match physics radius 0.52
       model.scale.setScalar(0.52);
       model.traverse((node) => {

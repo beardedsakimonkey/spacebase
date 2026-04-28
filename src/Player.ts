@@ -76,10 +76,6 @@ const RESPAWN_Y = -14;
 
 const rayCollector = createClosestCastRayCollector();
 const raySettings = createDefaultCastRaySettings();
-const ignoreSingleBodyFilterState = {
-  bodyId: -1,
-  innerBodyFilter: undefined as ((body: RigidBody) => boolean) | undefined,
-};
 
 const rayOrigin: Vec3 = vec3.create();
 const currentHorizontal: Vec3 = vec3.create();
@@ -134,25 +130,6 @@ const PLAYER_TUNING: Readonly<PlayerTuning> = {
   dashDuration: 0.44,
   dashCooldown: 0.7,
 };
-
-function ignoreSingleBodyFilter(body: RigidBody): boolean {
-  if (body.id === ignoreSingleBodyFilterState.bodyId) {
-    return false;
-  }
-  return ignoreSingleBodyFilterState.innerBodyFilter?.(body) ?? true;
-}
-
-function setIgnoreSingleBodyFilter(queryFilter: Filter, ignoreBodyId: number) {
-  ignoreSingleBodyFilterState.bodyId = ignoreBodyId;
-  ignoreSingleBodyFilterState.innerBodyFilter = queryFilter.bodyFilter;
-  queryFilter.bodyFilter = ignoreSingleBodyFilter;
-}
-
-function resetIgnoreSingleBodyFilter(queryFilter: Filter) {
-  queryFilter.bodyFilter = ignoreSingleBodyFilterState.innerBodyFilter;
-  ignoreSingleBodyFilterState.bodyId = -1;
-  ignoreSingleBodyFilterState.innerBodyFilter = undefined;
-}
 
 export class PlayerController {
   readonly body: RigidBody;
@@ -214,6 +191,7 @@ export class PlayerController {
     });
     this.body.motionProperties.gravityFactor = tuning.normalGravityScale;
     this.queryFilter = filter.create(world.settings.layers);
+    this.queryFilter.bodyFilter = (body) => body.id !== this.body.id;
     this.object = this.createVisual();
     scene.add(this.object);
   }
@@ -461,10 +439,8 @@ export class PlayerController {
 
     const rayLength = this.tuning.capsuleRadius + 2;
 
-    setIgnoreSingleBodyFilter(this.queryFilter, this.body.id);
     rayCollector.reset();
     castRay(world, rayCollector, raySettings, rayOrigin, [0, -1, 0], rayLength, this.queryFilter);
-    resetIgnoreSingleBodyFilter(this.queryFilter);
 
     const hitDistance = rayCollector.hit.status === CastRayStatus.COLLIDING
       ? rayCollector.hit.fraction * rayLength

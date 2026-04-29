@@ -31,9 +31,13 @@ renderer.domElement.focus();
 
 (async () => {
   const scene = new THREE.Scene();
-  const camera = new FollowCamera(window.innerWidth / window.innerHeight);
-  const input = new InputController(renderer.domElement);
   const physics = createPhysicsContext();
+  const camera = new FollowCamera(
+    window.innerWidth / window.innerHeight,
+    physics.world,
+    physics.layers,
+  );
+  const input = new InputController(renderer.domElement);
   const arena = await Arena.create(physics.world, physics.layers, scene);
   const player = new PlayerController(physics.world, physics.layers, scene);
   const ball = new BallController(physics.world, physics.layers, scene);

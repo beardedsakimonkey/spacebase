@@ -6,6 +6,8 @@ export type MovementInput = {
   jump: boolean;
 };
 
+const RAW_POINTER_MOUSEMOVE_SUPPRESSION_MS = 50;
+
 export class InputController {
   private readonly keys = new Set<string>();
   private interactPressed = false;
@@ -18,13 +20,17 @@ export class InputController {
   private hasPointerPosition = false;
   private yawDelta = 0;
   private pitchDelta = 0;
+  private rawPointerActiveUntil = 0;
 
   constructor(private readonly target: HTMLElement) {
     window.addEventListener("keydown", (event) => this.handleKeyDown(event));
     window.addEventListener("keyup", (event) => this.keys.delete(event.code));
     document.addEventListener("pointerlockchange", () => this.handlePointerLockChange());
     target.addEventListener("pointerdown", (event) => this.handlePointerDown(event));
-    // mousemove instead of pointermove: Firefox doesn't set movementX/Y on PointerEvent under pointer lock.
+    // In pointer lock, mousemove was sometimes dropping events while focus stayed locked,
+    // which made camera rotation feel janky. Prefer raw pointer deltas when available.
+    document.addEventListener("pointerrawupdate", (event) => this.handlePointerRawUpdate(event));
+    // Keep mousemove as the fallback: Firefox doesn't set movementX/Y on PointerEvent under pointer lock.
     window.addEventListener("mousemove", (event) => this.handlePointerMove(event));
     window.addEventListener("pointerup", (event) => this.handlePointerUp(event));
     window.addEventListener("pointercancel", (event) => this.handlePointerUp(event));
@@ -128,6 +134,9 @@ export class InputController {
 
   private handlePointerMove(event: MouseEvent) {
     if (document.pointerLockElement === this.target) {
+      if (performance.now() < this.rawPointerActiveUntil) {
+        return;
+      }
       this.yawDelta += event.movementX;
       this.pitchDelta += event.movementY;
       return;
@@ -144,6 +153,19 @@ export class InputController {
     this.pitchDelta += event.clientY - this.pointerY;
     this.pointerX = event.clientX;
     this.pointerY = event.clientY;
+  }
+
+  private handlePointerRawUpdate(event: PointerEvent) {
+    if (document.pointerLockElement !== this.target) {
+      return;
+    }
+
+    this.yawDelta += event.movementX;
+    this.pitchDelta += event.movementY;
+
+    if (event.movementX !== 0 || event.movementY !== 0) {
+      this.rawPointerActiveUntil = performance.now() + RAW_POINTER_MOUSEMOVE_SUPPRESSION_MS;
+    }
   }
 
   private handlePointerUp(event: PointerEvent) {

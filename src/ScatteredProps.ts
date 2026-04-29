@@ -2,6 +2,7 @@ import {
   box,
   MotionQuality,
   MotionType,
+  offsetCenterOfMass,
   rigidBody,
   type World,
 } from "crashcat";
@@ -28,6 +29,7 @@ export type ScatteredPropPlacement = ModelTransform & {
   friction?: number;
   restitution?: number;
   mass?: number;
+  offset?: Vec3;
   linearDamping?: number;
   angularDamping?: number;
 };
@@ -37,20 +39,39 @@ export type ScatteredPropModels = Map<PlatformerNeutralModel, THREE.Group>;
 const FLOOR_TOP = 0;
 const SECOND_STORY_TOP = 4;
 
+const CONE: Omit<ScatteredPropPlacement, "x" | "y" | "z" | "ry"> = {
+  model: "cone",
+  halfExtents: [0.28, 0.33, 0.28],
+  dynamic: true,
+  friction: 0.9,
+  restitution: 0.18,
+  mass: 0.25,
+  offset: [0, -0.22, 0],
+  linearDamping: 0.08,
+  angularDamping: 0.18,
+};
+
 export const SCATTERED_PROPS: ScatteredPropPlacement[] = [
   {
-    model: "cone",
+    ...CONE,
     x: -15.5,
     y: FLOOR_TOP,
     z: -33,
     ry: 0.4,
-    halfExtents: [0.28, 0.33, 0.28],
-    dynamic: true,
-    friction: 0.9,
-    restitution: 0.18,
-    mass: 0.25,
-    linearDamping: 0.08,
-    angularDamping: 0.18,
+  },
+  {
+    ...CONE,
+    x: -17.2,
+    y: FLOOR_TOP,
+    z: -31.4,
+    ry: -0.15,
+  },
+  {
+    ...CONE,
+    x: -13.8,
+    y: FLOOR_TOP,
+    z: -34.6,
+    ry: 0.9,
   },
   {
     model: "sign",
@@ -183,8 +204,13 @@ function addDynamicProp(
   object.add(visual);
   scene.add(object);
 
+  const baseShape = box.create({ halfExtents: placement.halfExtents, convexRadius: 0.03 });
+  const shape = placement.offset
+    ? offsetCenterOfMass.create({ shape: baseShape, offset: placement.offset })
+    : baseShape;
+
   const body = rigidBody.create(world, {
-    shape: box.create({ halfExtents: placement.halfExtents, convexRadius: 0.03 }),
+    shape,
     motionType: MotionType.DYNAMIC,
     objectLayer: layers.props,
     position: [placement.x, bodyY, placement.z],

@@ -8,7 +8,6 @@ import {
   type RigidBody,
   type World,
 } from "crashcat";
-import { debugRenderer } from "crashcat/three";
 import * as THREE from "three";
 
 export type PhysicsLayers = {
@@ -60,23 +59,6 @@ export function createPhysicsContext(): PhysicsContext {
       props,
       heldProp,
       kinematic,
-    },
-  };
-}
-
-export function createDebugPhysicsObject(scene: THREE.Scene) {
-  const options = debugRenderer.createDefaultOptions();
-  const state = debugRenderer.init(options);
-  state.object3d.visible = false;
-  scene.add(state.object3d);
-
-  return {
-    object: state.object3d,
-    update(world: World, visible: boolean) {
-      state.object3d.visible = visible;
-      if (visible) {
-        debugRenderer.update(state, world);
-      }
     },
   };
 }

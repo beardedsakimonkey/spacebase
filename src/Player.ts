@@ -36,8 +36,8 @@ type PlayerInputState = {
   wantToJump: boolean;
 };
 
-const PLAYER_MODEL_SCALE = 0.82;
-const PLAYER_MODEL_OFFSET_Y = -0.9;
+const PLAYER_MODEL_SCALE = 1.0;
+const PLAYER_MODEL_OFFSET_Y = -1.1;
 const PLAYER_BODY_COLOR: MannequinBodyColor = "yellow";
 const MOVE_INPUT_EPSILON = 0.001;
 const TURN_TARGET_EPSILON = 0.08;
@@ -75,14 +75,14 @@ function normalizeAngle(angle: number) {
 }
 
 const TUNING = {
-  capsuleRadius: 0.48,
-  capsuleHalfHeight: 0.42,
+  capsuleRadius: 0.58,
+  capsuleHalfHeight: 0.51,
   maxRunSpeed: 7,
   accelerationTime: 7.5,
   turnSpeed: 9,
   airControlFactor: 0.22,
   dragDampingC: 0.18,
-  moveImpulsePointY: 0.42,
+  moveImpulsePointY: 0.51,
   playerFriction: 0.35,
   maxSlopeAngle: 0.95,
   balanceSpringK: 0.42,

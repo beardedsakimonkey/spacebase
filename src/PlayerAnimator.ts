@@ -88,7 +88,7 @@ export class PlayerAnimator {
     const action = this.animationActions.get(desired);
     if (action && desired === "run") {
       action.timeScale = THREE.MathUtils.clamp(state.horizontalSpeed / RUN_ANIMATION_BASE_SPEED, 0.8, 1.65);
-    } else if (action && (desired === "throw" || desired === "jumpStart")) {
+    } else if (action && (desired === "throw" || desired === "jumpStart" || desired === "jumpLand")) {
       action.timeScale = 2;
     } else if (action) {
       action.timeScale = 1;

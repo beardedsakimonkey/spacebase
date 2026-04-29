@@ -21,6 +21,7 @@ import {
   createConveyorListener,
   loadConveyorModel,
 } from "./Conveyor";
+import { addScatteredProps, loadScatteredPropModels, type ScatteredPropModels } from "./ScatteredProps";
 import { buildInstancedMesh, loadGltfMesh, loadGltfScene, type GltfMesh, type TileTransform } from "./util/kaykit";
 import type { PhysicsEntity, PhysicsLayers } from "./physics";
 import { addSky } from "./Sky";
@@ -85,6 +86,7 @@ export class Arena {
   private redRamp!: THREE.Group;
   private blueSwiperDoubleLong!: THREE.Group;
   private redSwiperDoubleLong!: THREE.Group;
+  private scatteredPropModels!: ScatteredPropModels;
   private conveyorTextures: THREE.Texture[] = [];
   private sunShadowDebug!: SunShadowDebug;
 
@@ -106,6 +108,7 @@ export class Arena {
     arena.buildConveyors();
     arena.buildBoundaryWalls();
     arena.buildRaisedDecks();
+    arena.buildScatteredProps();
     arena.buildSwipers();
 
     return arena;
@@ -147,6 +150,7 @@ export class Arena {
       rampRed,
       swiperBlue,
       swiperRed,
+      scatteredPropModels,
     ] = await Promise.all([
       loadGltfMesh(platformerAsset("blue", "platform_6x6x4")),
       loadGltfMesh(platformerAsset("red", "platform_6x6x4")),
@@ -158,6 +162,7 @@ export class Arena {
       loadModel(platformerAsset("red", "platform_slope_4x6x4")),
       loadModel(platformerAsset("blue", "swiper_double_long")),
       loadModel(platformerAsset("red", "swiper_double_long")),
+      loadScatteredPropModels(),
     ]);
 
     this.bluePlatform6x6x4 = platform6x6x4Blue;
@@ -170,6 +175,7 @@ export class Arena {
     this.redRamp = rampRed;
     this.blueSwiperDoubleLong = swiperBlue;
     this.redSwiperDoubleLong = swiperRed;
+    this.scatteredPropModels = scatteredPropModels;
     this.conveyorTextures = [
       ...conveyorLongBlue.textures,
       ...conveyorLongRed.textures,
@@ -295,6 +301,10 @@ export class Arena {
 
     addTiles(this.scene, this.redPlatform6x6x4, redDeckTiles);
     addTiles(this.scene, this.bluePlatform6x6x4, blueDeckTiles);
+  }
+
+  private buildScatteredProps() {
+    addScatteredProps(this.world, this.layers, this.scene, this.entities, this.scatteredPropModels);
   }
 
   private buildSwipers() {

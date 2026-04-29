@@ -6,6 +6,8 @@ import {
   MotionType,
   MotorState,
   rigidBody,
+  staticCompound,
+  type CompoundShapeChild,
   type Listener,
   type World,
 } from "crashcat";
@@ -89,6 +91,8 @@ export class Arena {
   private scatteredPropModels!: ScatteredPropModels;
   private conveyorTextures: THREE.Texture[] = [];
   private sunShadowDebug!: SunShadowDebug;
+  private readonly platformColliders = new StaticBoxBatch(1.45, 0.06);
+  private readonly barrierColliders = new StaticBoxBatch(0.75, 0.35);
 
   private constructor(
     private readonly world: World,
@@ -108,6 +112,7 @@ export class Arena {
     arena.buildConveyors();
     arena.buildBoundaryWalls();
     arena.buildRaisedDecks();
+    arena.flushStaticColliderBatches();
     arena.buildScatteredProps();
     arena.buildSwipers();
 
@@ -190,17 +195,17 @@ export class Arena {
 
     for (const x of BASE_XS) {
       for (const z of BLUE_BASE_ZS) {
-        addPlatformTile(this.world, this.layers, blueTiles, x, z, FLOOR_TOP);
+        addPlatformTile(this.platformColliders, blueTiles, x, z, FLOOR_TOP);
       }
       for (const z of RED_BASE_ZS) {
-        addPlatformTile(this.world, this.layers, redTiles, x, z, FLOOR_TOP);
+        addPlatformTile(this.platformColliders, redTiles, x, z, FLOOR_TOP);
       }
     }
 
     for (const x of CORRIDOR_XS) {
       for (const z of CORRIDOR_ZS) {
         const tiles = z < 0 ? blueCorridorTiles : redCorridorTiles;
-        addPlatformTile(this.world, this.layers, tiles, x, z, FLOOR_TOP);
+        addPlatformTile(this.platformColliders, tiles, x, z, FLOOR_TOP);
       }
     }
 
@@ -248,33 +253,33 @@ export class Arena {
     const redTall: BarrierPlacement[] = [];
 
     for (const x of [-18, -14, -10, -6, -2, 2, 6, 10, 14, 18]) {
-      addBarrier(this.world, this.layers, blueTall, x, 0, -45.5, 0, 4);
-      addBarrier(this.world, this.layers, redTall, x, 0, 45.5, 0, 4);
+      addBarrier(this.barrierColliders, blueTall, x, 0, -45.5, 0, 4);
+      addBarrier(this.barrierColliders, redTall, x, 0, 45.5, 0, 4);
     }
 
     for (const z of [-44, -40, -36, -32, -28, -24]) {
-      addBarrier(this.world, this.layers, blueTall, -21.5, 0, z, Math.PI / 2, 4);
-      addBarrier(this.world, this.layers, blueTall, 21.5, 0, z, Math.PI / 2, 4);
+      addBarrier(this.barrierColliders, blueTall, -21.5, 0, z, Math.PI / 2, 4);
+      addBarrier(this.barrierColliders, blueTall, 21.5, 0, z, Math.PI / 2, 4);
     }
 
     for (const z of [24, 28, 32, 36, 40, 44]) {
-      addBarrier(this.world, this.layers, redTall, -21.5, 0, z, Math.PI / 2, 4);
-      addBarrier(this.world, this.layers, redTall, 21.5, 0, z, Math.PI / 2, 4);
+      addBarrier(this.barrierColliders, redTall, -21.5, 0, z, Math.PI / 2, 4);
+      addBarrier(this.barrierColliders, redTall, 21.5, 0, z, Math.PI / 2, 4);
     }
 
     for (const x of [-18, 18]) {
-      addBarrier(this.world, this.layers, blueTall, x, 0, -21.5, 0, 4);
-      addBarrier(this.world, this.layers, redTall, x, 0, 21.5, 0, 4);
+      addBarrier(this.barrierColliders, blueTall, x, 0, -21.5, 0, 4);
+      addBarrier(this.barrierColliders, redTall, x, 0, 21.5, 0, 4);
     }
 
     for (const z of [-18, -14, -10, -6, -2]) {
-      addBarrier(this.world, this.layers, blueTall, -CORRIDOR_WALL_X, 0, z, Math.PI / 2, 4);
-      addBarrier(this.world, this.layers, blueTall, CORRIDOR_WALL_X, 0, z, Math.PI / 2, 4);
+      addBarrier(this.barrierColliders, blueTall, -CORRIDOR_WALL_X, 0, z, Math.PI / 2, 4);
+      addBarrier(this.barrierColliders, blueTall, CORRIDOR_WALL_X, 0, z, Math.PI / 2, 4);
     }
 
     for (const z of [2, 6, 10, 14, 18]) {
-      addBarrier(this.world, this.layers, redTall, -CORRIDOR_WALL_X, 0, z, Math.PI / 2, 4);
-      addBarrier(this.world, this.layers, redTall, CORRIDOR_WALL_X, 0, z, Math.PI / 2, 4);
+      addBarrier(this.barrierColliders, redTall, -CORRIDOR_WALL_X, 0, z, Math.PI / 2, 4);
+      addBarrier(this.barrierColliders, redTall, CORRIDOR_WALL_X, 0, z, Math.PI / 2, 4);
     }
 
     addTiles(this.scene, this.blueBarrierTall, blueTall);
@@ -287,12 +292,12 @@ export class Arena {
 
     for (const x of [-12, -6]) {
       for (const z of [34, 40]) {
-        addPlatformTile(this.world, this.layers, redDeckTiles, x, z, SECOND_STORY_TOP);
+        addPlatformTile(this.platformColliders, redDeckTiles, x, z, SECOND_STORY_TOP);
       }
     }
     for (const x of [6, 12]) {
       for (const z of [-34, -40]) {
-        addPlatformTile(this.world, this.layers, blueDeckTiles, x, z, SECOND_STORY_TOP);
+        addPlatformTile(this.platformColliders, blueDeckTiles, x, z, SECOND_STORY_TOP);
       }
     }
 
@@ -305,6 +310,11 @@ export class Arena {
 
   private buildScatteredProps() {
     addScatteredProps(this.world, this.layers, this.scene, this.entities, this.scatteredPropModels);
+  }
+
+  private flushStaticColliderBatches() {
+    this.platformColliders.createBody(this.world, this.layers.terrain);
+    this.barrierColliders.createBody(this.world, this.layers.terrain);
   }
 
   private buildSwipers() {
@@ -342,6 +352,55 @@ async function loadModel(path: string) {
   return model;
 }
 
+// Groups repeated static tile colliders into one BVH-backed body per material,
+// reducing rigid-body count while keeping each box as an individual collision child.
+class StaticBoxBatch {
+  private readonly children: CompoundShapeChild[] = [];
+  private readonly boxShapes = new Map<string, ReturnType<typeof box.create>>();
+  private flushed = false;
+
+  constructor(
+    private readonly friction: number,
+    private readonly restitution: number,
+  ) {}
+
+  addBox(halfExtents: Vec3, position: Vec3, quaternion: Quat = [0, 0, 0, 1]) {
+    this.children.push({
+      shape: this.getBoxShape(halfExtents),
+      position: [...position] as Vec3,
+      quaternion: [...quaternion] as Quat,
+    });
+  }
+
+  createBody(world: World, layer: number) {
+    if (this.flushed || this.children.length === 0) {
+      return;
+    }
+
+    this.flushed = true;
+    rigidBody.create(world, {
+      shape: staticCompound.create({ children: this.children }),
+      motionType: MotionType.STATIC,
+      objectLayer: layer,
+      position: [0, 0, 0],
+      friction: this.friction,
+      restitution: this.restitution,
+    });
+  }
+
+  private getBoxShape(halfExtents: Vec3) {
+    const key = `${halfExtents[0]},${halfExtents[1]},${halfExtents[2]}`;
+    const existing = this.boxShapes.get(key);
+    if (existing) {
+      return existing;
+    }
+
+    const shape = box.create({ halfExtents: [...halfExtents] as Vec3 });
+    this.boxShapes.set(key, shape);
+    return shape;
+  }
+}
+
 function addRamp(
   world: World,
   layers: PhysicsLayers,
@@ -364,8 +423,7 @@ function addRamp(
 }
 
 function addPlatformTile(
-  world: World,
-  layers: PhysicsLayers,
+  colliders: StaticBoxBatch,
   tiles: TileTransform[],
   x: number,
   z: number,
@@ -373,15 +431,11 @@ function addPlatformTile(
   halfExtent = PLATFORM_HALF_EXTENT,
 ) {
   tiles.push({ x, y: top - PLATFORM_HEIGHT, z });
-  staticBox(world, layers.terrain, [halfExtent, PLATFORM_HEIGHT / 2, halfExtent], [x, top - PLATFORM_HEIGHT / 2, z], {
-    friction: 1.45,
-    restitution: 0.06,
-  });
+  colliders.addBox([halfExtent, PLATFORM_HEIGHT / 2, halfExtent], [x, top - PLATFORM_HEIGHT / 2, z]);
 }
 
 function addBarrier(
-  world: World,
-  layers: PhysicsLayers,
+  colliders: StaticBoxBatch,
   tiles: BarrierPlacement[],
   x: number,
   y: number,
@@ -390,11 +444,7 @@ function addBarrier(
   height: number,
 ) {
   tiles.push({ x, y, z, ry, height });
-  staticBox(world, layers.terrain, [2, height / 2, BARRIER_HALF_THICKNESS], [x, y + height / 2, z], {
-    quaternion: yawQuat(ry),
-    friction: 0.75,
-    restitution: 0.35,
-  });
+  colliders.addBox([2, height / 2, BARRIER_HALF_THICKNESS], [x, y + height / 2, z], yawQuat(ry));
 }
 
 function addModelInstances(scene: THREE.Scene, source: THREE.Group, placements: ModelTransform[]) {
@@ -470,24 +520,6 @@ function addTiles(scene: THREE.Scene, mesh: GltfMesh, tiles: TileTransform[]) {
   scene.add(buildInstancedMesh(mesh, tiles));
 }
 
-function staticBox(
-  world: World,
-  layer: number,
-  halfExtents: Vec3,
-  position: Vec3,
-  options: { quaternion?: Quat; friction?: number; restitution?: number } = {},
-) {
-  return rigidBody.create(world, {
-    shape: box.create({ halfExtents }),
-    motionType: MotionType.STATIC,
-    objectLayer: layer,
-    position,
-    quaternion: options.quaternion,
-    friction: options.friction ?? 1,
-    restitution: options.restitution ?? 0.08,
-  });
-}
-
 function yawQuat(yaw: number): Quat {
   const out = quat.create();
   quat.setAxisAngle(out, Y_AXIS, yaw);
@@ -526,6 +558,6 @@ function createSunShadowDebug(sun: THREE.DirectionalLight): SunShadowDebug {
 function layoutSunShadowMapViewer(viewer: ShadowMapViewer) {
   const size = Math.min(260, Math.max(160, Math.floor(window.innerWidth * 0.22)));
   viewer.size.set(size, size);
-  viewer.position.set(window.innerWidth - size - 14, 14);
+  viewer.position.set(14, 14);
   viewer.update();
 }

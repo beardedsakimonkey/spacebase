@@ -1,8 +1,9 @@
+import GUI, { type Controller } from "lil-gui";
+import Stats from "stats.js";
 import type { BallTelemetry } from "./Ball";
 import type { PlayerTelemetry } from "./Player";
 
 export type DevHudStats = {
-  fps: number;
   physicsMs: number;
   player: PlayerTelemetry;
   ball: BallTelemetry;
@@ -17,115 +18,91 @@ export type DevHudOptions = {
   onSunShadowDebugChange: (enabled: boolean) => void;
 };
 
+type DevHudValues = {
+  physicsMs: string;
+  speed: string;
+  state: string;
+  ball: string;
+  jump: string;
+  sunShadow: boolean;
+};
+
 export class DevHud {
-  private readonly root = document.createElement("aside");
-  private readonly readouts = new Map<string, HTMLElement>();
-  private sunShadowDebugInput?: HTMLInputElement;
+  private readonly gui = new GUI({ title: "Dev HUD", width: 280 });
+  private readonly stats = new Stats();
+  private readonly values: DevHudValues;
+  private readonly readoutControllers: Controller[] = [];
+  private sunShadowController?: Controller;
 
   constructor(options?: DevHudOptions) {
-    this.root.className = "hud";
-    this.root.setAttribute("aria-expanded", "false");
+    this.values = {
+      physicsMs: "-",
+      speed: "-",
+      state: "-",
+      ball: "-",
+      jump: "-",
+      sunShadow: options?.debugState.sunShadow ?? false,
+    };
 
-    const header = document.createElement("button");
-    header.className = "hud-header";
-    header.type = "button";
-    header.innerHTML = "<span>Dev HUD</span><span>expand</span>";
-    header.addEventListener("click", () => {
-      const expanded = this.root.getAttribute("aria-expanded") !== "false";
-      this.root.setAttribute("aria-expanded", expanded ? "false" : "true");
-      header.lastElementChild!.textContent = expanded ? "expand" : "collapse";
-    });
-
-    const body = document.createElement("div");
-    body.className = "hud-body";
-    body.append(this.createReadouts());
+    this.configureStatsPanel();
+    this.createReadouts();
     if (options) {
-      body.append(this.createDebugControls(options));
+      this.createDebugControls(options);
     }
+  }
 
-    this.root.append(header, body);
-    document.body.append(this.root);
+  beginFrame() {
+    this.stats.begin();
+  }
+
+  endFrame() {
+    this.stats.end();
   }
 
   update(stats: DevHudStats) {
-    this.setReadout("fps", stats.fps.toFixed(0));
-    this.setReadout("step", `${stats.physicsMs.toFixed(2)}ms`);
-    this.setReadout("speed", stats.player.speed.toFixed(2));
-    this.setReadout("ground", stats.player.grounded ? "ground" : "air");
-    this.setReadout("ball", stats.ball.held ? "held" : `${stats.ball.distance.toFixed(1)}m`);
-    this.setReadout("jump", stats.player.canJump ? "ready" : "no");
+    this.values.physicsMs = `${stats.physicsMs.toFixed(2)}ms`;
+    this.values.speed = stats.player.speed.toFixed(2);
+    this.values.state = stats.player.grounded ? "ground" : "air";
+    this.values.ball = stats.ball.held ? "held" : `${stats.ball.distance.toFixed(1)}m`;
+    this.values.jump = stats.player.canJump ? "ready" : "no";
+
+    for (const controller of this.readoutControllers) {
+      controller.updateDisplay();
+    }
   }
 
   setDebugState(state: DevHudDebugState) {
-    if (this.sunShadowDebugInput) {
-      this.sunShadowDebugInput.checked = state.sunShadow;
-    }
+    this.values.sunShadow = state.sunShadow;
+    this.sunShadowController?.updateDisplay();
+  }
+
+  private configureStatsPanel() {
+    this.stats.showPanel(0);
+    this.stats.dom.style.top = "14px";
+    this.stats.dom.style.left = "14px";
+    this.stats.dom.style.zIndex = "20";
+    document.body.append(this.stats.dom);
   }
 
   private createReadouts() {
-    const container = document.createElement("div");
-    container.className = "readouts";
+    const folder = this.gui.addFolder("Readouts");
 
-    for (const [key, label] of [
-      ["fps", "FPS"],
-      ["step", "Physics"],
-      ["speed", "Speed"],
-      ["ground", "State"],
-      ["ball", "Ball"],
-      ["jump", "Jump"],
-    ] as const) {
-      const readout = document.createElement("div");
-      readout.className = "readout";
-      const labelElement = document.createElement("span");
-      labelElement.className = "readout-label";
-      labelElement.textContent = label;
-      const value = document.createElement("span");
-      value.className = "readout-value";
-      value.textContent = "-";
-      readout.append(labelElement, value);
-      this.readouts.set(key, value);
-      container.append(readout);
-    }
-
-    return container;
+    this.readoutControllers.push(
+      folder.add(this.values, "physicsMs").name("Physics").disable(),
+      folder.add(this.values, "speed").name("Speed").disable(),
+      folder.add(this.values, "state").name("State").disable(),
+      folder.add(this.values, "ball").name("Ball").disable(),
+      folder.add(this.values, "jump").name("Jump").disable(),
+    );
   }
 
   private createDebugControls(options: DevHudOptions) {
-    const container = document.createElement("div");
-    container.className = "hud-controls";
-
-    this.sunShadowDebugInput = this.createToggle(
-      "Sun Shadow",
-      options.debugState.sunShadow,
-      options.onSunShadowDebugChange,
-    );
-
-    container.append(this.sunShadowDebugInput.parentElement!);
-    return container;
-  }
-
-  private createToggle(label: string, checked: boolean, onChange: (enabled: boolean) => void) {
-    const control = document.createElement("label");
-    control.className = "hud-toggle";
-
-    const text = document.createElement("span");
-    text.className = "hud-toggle-label";
-    text.textContent = label;
-
-    const input = document.createElement("input");
-    input.className = "hud-toggle-input";
-    input.type = "checkbox";
-    input.checked = checked;
-    input.addEventListener("change", () => onChange(input.checked));
-
-    control.append(text, input);
-    return input;
-  }
-
-  private setReadout(key: string, value: string) {
-    const element = this.readouts.get(key);
-    if (element) {
-      element.textContent = value;
-    }
+    const folder = this.gui.addFolder("Debug");
+    this.sunShadowController = folder
+      .add(this.values, "sunShadow")
+      .name("Sun Shadow")
+      .onChange((enabled: boolean) => {
+        options.onSunShadowDebugChange(enabled);
+      });
   }
 }

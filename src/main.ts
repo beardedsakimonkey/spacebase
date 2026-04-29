@@ -63,7 +63,6 @@ renderer.domElement.focus();
   let lastTime = performance.now();
   let accumulator = 0;
   let elapsed = 0;
-  let smoothedFps = 60;
   let lastPhysicsMs = 0;
   let pendingDrop = false;
   let pendingThrowPress = false;
@@ -83,11 +82,11 @@ renderer.domElement.focus();
 
   function animationFrame(now: number) {
     requestAnimationFrame(animationFrame);
+    hud.beginFrame();
 
     const frameTime = Math.min((now - lastTime) / 1000, 0.1);
     lastTime = now;
     accumulator += frameTime;
-    smoothedFps = THREE.MathUtils.lerp(smoothedFps, 1 / Math.max(frameTime, 0.0001), 0.08);
 
     const lookDelta = input.consumeLookDelta();
     camera.applyLookDelta(lookDelta.yaw, lookDelta.pitch);
@@ -197,7 +196,6 @@ renderer.domElement.focus();
     arena.updateSunShadowDebug(debugSettings.sunShadow);
     hud.setDebugState(debugSettings);
     hud.update({
-      fps: smoothedFps,
       physicsMs: lastPhysicsMs,
       player: player.getTelemetry(),
       ball: ball.getTelemetry(player),
@@ -205,6 +203,7 @@ renderer.domElement.focus();
 
     renderer.render(scene, camera.camera);
     arena.renderSunShadowDebug(renderer);
+    hud.endFrame();
   }
 
   requestAnimationFrame(animationFrame);

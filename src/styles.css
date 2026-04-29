@@ -34,112 +34,11 @@ canvas {
   outline: none;
 }
 
-.hud {
+body > .lil-gui.root {
   position: fixed;
   top: 14px;
-  left: 14px;
-  width: min(360px, calc(100vw - 28px));
-  max-height: calc(100vh - 28px);
-  overflow: auto;
-  color: #f7fbff;
-  background: rgb(15 24 46 / 78%);
-  border: 1px solid rgb(255 255 255 / 18%);
-  border-radius: 8px;
-  box-shadow: 0 18px 48px rgb(0 15 45 / 28%);
-  backdrop-filter: blur(14px);
-  z-index: 10;
-}
-
-.hud[aria-expanded="false"] .hud-body {
-  display: none;
-}
-
-.hud-header {
-  width: 100%;
-  min-height: 42px;
-  border: 0;
-  color: inherit;
-  background: transparent;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 12px;
-  cursor: pointer;
-  font: inherit;
-  font-weight: 800;
-}
-
-.hud-header span:last-child {
-  color: #9df7ff;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.hud-body {
-  padding: 0 12px 12px;
-}
-
-.readouts {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
-  margin: 0 0 10px;
-}
-
-.readout {
-  min-height: 44px;
-  padding: 7px 8px;
-  border-radius: 6px;
-  background: rgb(255 255 255 / 10%);
-}
-
-.readout-label {
-  display: block;
-  color: #a7d9ff;
-  font-size: 10px;
-  font-weight: 800;
-  text-transform: uppercase;
-}
-
-.readout-value {
-  display: block;
-  margin-top: 3px;
-  font-size: 13px;
-  font-weight: 800;
-}
-
-.hud-controls {
-  display: grid;
-  gap: 6px;
-}
-
-.hud-toggle {
-  min-height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 7px 8px;
-  border-radius: 6px;
-  background: rgb(255 255 255 / 10%);
-}
-
-.hud-toggle-label {
-  min-width: 0;
-  color: #a7d9ff;
-  font-size: 10px;
-  font-weight: 800;
-  text-transform: uppercase;
-}
-
-.hud-toggle-input {
-  width: 18px;
-  height: 18px;
-  flex: 0 0 auto;
-  margin: 0;
-  accent-color: #9df7ff;
-  cursor: pointer;
+  right: 14px;
+  z-index: 20;
 }
 
 .help {
@@ -213,10 +112,10 @@ canvas {
 }
 
 @media (max-width: 700px) {
-  .hud {
+  body > .lil-gui.root {
     top: 8px;
-    left: 8px;
-    width: calc(100vw - 16px);
+    right: 8px;
+    width: min(280px, calc(100vw - 16px));
   }
 
   .help {

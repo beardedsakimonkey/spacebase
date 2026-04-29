@@ -17,7 +17,7 @@ const FORWARD = new THREE.Vector3();
 const RIGHT = new THREE.Vector3();
 const POINTER_RAY = new THREE.Vector3();
 
-export class FollowCamera {
+export class Camera {
   readonly camera: THREE.PerspectiveCamera;
   yaw = Math.PI * 0.22;
   pitch = -0.55;

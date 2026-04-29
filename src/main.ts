@@ -3,7 +3,7 @@ import * as THREE from "three";
 import "./styles.css";
 import { Arena } from "./Arena";
 import { BallController } from "./Ball";
-import { FollowCamera } from "./camera";
+import { Camera } from "./Camera";
 import { DevHud } from "./hud";
 import { InputController } from "./input";
 import { PlayerController } from "./Player";
@@ -32,7 +32,7 @@ renderer.domElement.focus();
 (async () => {
   const scene = new THREE.Scene();
   const physics = createPhysicsContext();
-  const camera = new FollowCamera(
+  const camera = new Camera(
     window.innerWidth / window.innerHeight,
     physics.world,
     physics.layers,

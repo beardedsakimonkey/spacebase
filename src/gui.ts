@@ -3,22 +3,22 @@ import Stats from "stats.js";
 import type { BallTelemetry } from "./Ball";
 import type { PlayerTelemetry } from "./Player";
 
-export type DevHudStats = {
+export type GuiStats = {
   physicsMs: number;
   player: PlayerTelemetry;
   ball: BallTelemetry;
 };
 
-export type DevHudDebugState = {
+export type GuiDebugState = {
   sunShadow: boolean;
 };
 
-export type DevHudOptions = {
-  debugState: DevHudDebugState;
+export type GuiOptions = {
+  debugState: GuiDebugState;
   onSunShadowDebugChange: (enabled: boolean) => void;
 };
 
-type DevHudValues = {
+type GuiValues = {
   physicsMs: string;
   speed: string;
   state: string;
@@ -27,14 +27,14 @@ type DevHudValues = {
   sunShadow: boolean;
 };
 
-export class DevHud {
+export class Gui {
   private readonly gui = new GUI({ title: "Dev HUD", width: 280 });
   private readonly stats = new Stats();
-  private readonly values: DevHudValues;
+  private readonly values: GuiValues;
   private readonly readoutControllers: Controller[] = [];
   private sunShadowController?: Controller;
 
-  constructor(options?: DevHudOptions) {
+  constructor(options?: GuiOptions) {
     this.values = {
       physicsMs: "-",
       speed: "-",
@@ -59,7 +59,7 @@ export class DevHud {
     this.stats.end();
   }
 
-  update(stats: DevHudStats) {
+  update(stats: GuiStats) {
     this.values.physicsMs = `${stats.physicsMs.toFixed(2)}ms`;
     this.values.speed = stats.player.speed.toFixed(2);
     this.values.state = stats.player.grounded ? "ground" : "air";
@@ -71,7 +71,7 @@ export class DevHud {
     }
   }
 
-  setDebugState(state: DevHudDebugState) {
+  setDebugState(state: GuiDebugState) {
     this.values.sunShadow = state.sunShadow;
     this.sunShadowController?.updateDisplay();
   }
@@ -96,7 +96,7 @@ export class DevHud {
     );
   }
 
-  private createDebugControls(options: DevHudOptions) {
+  private createDebugControls(options: GuiOptions) {
     const folder = this.gui.addFolder("Debug");
     this.sunShadowController = folder
       .add(this.values, "sunShadow")

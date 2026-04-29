@@ -4,7 +4,7 @@ import "./styles.css";
 import { Arena } from "./Arena";
 import { BallController } from "./Ball";
 import { Camera } from "./Camera";
-import { DevHud } from "./hud";
+import { DevHud } from "./gui";
 import { InputController } from "./input";
 import { PlayerController } from "./Player";
 import { createPhysicsContext, syncPhysicsEntities } from "./physics";

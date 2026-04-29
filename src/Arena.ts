@@ -14,7 +14,6 @@ import {
 import type { Quat, Vec3 } from "mathcat";
 import { quat } from "mathcat";
 import * as THREE from "three";
-import { ShadowMapViewer } from "three/addons/utils/ShadowMapViewer.js";
 import { platformerAsset } from "./assets";
 import {
   addConveyorSegment,
@@ -36,10 +35,6 @@ type ModelTransform = TileTransform & {
 
 type BarrierPlacement = TileTransform & {
   height: number;
-};
-
-type SunShadowDebug = {
-  shadowMapViewer: ShadowMapViewer;
 };
 
 const PLATFORM_HEIGHT = 4;
@@ -90,7 +85,6 @@ export class Arena {
   private redSwiperDoubleLong!: THREE.Group;
   private scatteredPropModels!: ScatteredPropModels;
   private conveyorTextures: THREE.Texture[] = [];
-  private sunShadowDebug!: SunShadowDebug;
   private readonly platformColliders = new StaticBoxBatch(1.45, 0.06);
   private readonly barrierColliders = new StaticBoxBatch(0.75, 0.35);
 
@@ -104,7 +98,6 @@ export class Arena {
     const arena = new Arena(world, layers, scene);
 
     const sun = addLighting(scene);
-    arena.sunShadowDebug = createSunShadowDebug(sun);
     addSky(scene, sun);
 
     await arena.loadAssets();
@@ -121,26 +114,6 @@ export class Arena {
 
   update(time: number, _dt: number) {
     animateConveyorTextures(this.conveyorTextures, time);
-  }
-
-  updateSunShadowDebug(visible: boolean) {
-    this.sunShadowDebug.shadowMapViewer.enabled = visible;
-    if (visible) {
-      layoutSunShadowMapViewer(this.sunShadowDebug.shadowMapViewer);
-    }
-  }
-
-  renderSunShadowDebug(renderer: THREE.WebGLRenderer) {
-    if (this.sunShadowDebug.shadowMapViewer.enabled) {
-      this.sunShadowDebug.shadowMapViewer.render(renderer);
-    }
-  }
-
-  resizeSunShadowDebug() {
-    const wasEnabled = this.sunShadowDebug.shadowMapViewer.enabled;
-    this.sunShadowDebug.shadowMapViewer.enabled = true;
-    layoutSunShadowMapViewer(this.sunShadowDebug.shadowMapViewer);
-    this.sunShadowDebug.shadowMapViewer.enabled = wasEnabled;
   }
 
   private async loadAssets() {
@@ -545,19 +518,4 @@ function addLighting(scene: THREE.Scene) {
 
   scene.add(sun);
   return sun;
-}
-
-function createSunShadowDebug(sun: THREE.DirectionalLight): SunShadowDebug {
-  const shadowMapViewer = new ShadowMapViewer(sun);
-  shadowMapViewer.enabled = false;
-  layoutSunShadowMapViewer(shadowMapViewer);
-
-  return { shadowMapViewer };
-}
-
-function layoutSunShadowMapViewer(viewer: ShadowMapViewer) {
-  const size = Math.min(260, Math.max(160, Math.floor(window.innerWidth * 0.22)));
-  viewer.size.set(size, size);
-  viewer.position.set(14, 14);
-  viewer.update();
 }

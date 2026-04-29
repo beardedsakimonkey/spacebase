@@ -4,7 +4,7 @@ import "./styles.css";
 import { Arena } from "./Arena";
 import { BallController } from "./Ball";
 import { Camera } from "./Camera";
-import { DevHud } from "./gui";
+import { Gui } from "./gui";
 import { InputController } from "./input";
 import { PlayerController } from "./Player";
 import { createPhysicsContext, syncPhysicsEntities } from "./physics";
@@ -41,23 +41,14 @@ renderer.domElement.focus();
   const arena = await Arena.create(physics.world, physics.layers, scene);
   const player = new PlayerController(physics.world, physics.layers, scene);
   const ball = new BallController(physics.world, physics.layers, scene);
-  const debugSettings = {
-    sunShadow: false,
-  };
   const playerRenderPosition = new THREE.Vector3();
 
-  const hud = new DevHud({
-    debugState: debugSettings,
-    onSunShadowDebugChange: (enabled) => {
-      debugSettings.sunShadow = enabled;
-    },
-  });
+  const gui = new Gui();
 
   window.addEventListener("resize", () => {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(window.innerWidth, window.innerHeight);
     camera.resize(window.innerWidth / window.innerHeight);
-    arena.resizeSunShadowDebug();
   });
 
   let lastTime = performance.now();
@@ -70,7 +61,6 @@ renderer.domElement.focus();
   let pendingChargedThrow = false;
   let pendingDash = false;
   let pendingReset = false;
-  let pendingDebugToggle = false;
   const throwDirection = new THREE.Vector3();
   const throwVelocity = new THREE.Vector3();
   const throwVelocityVec: [number, number, number] = [0, 0, 0];
@@ -82,7 +72,7 @@ renderer.domElement.focus();
 
   function animationFrame(now: number) {
     requestAnimationFrame(animationFrame);
-    hud.beginFrame();
+    gui.beginFrame();
 
     const frameTime = Math.min((now - lastTime) / 1000, 0.1);
     lastTime = now;
@@ -95,12 +85,6 @@ renderer.domElement.focus();
     pendingThrowPress ||= input.consumeThrowPressed();
     pendingThrowRelease ||= input.consumeThrowReleased();
     pendingReset ||= input.consumeResetPressed();
-    pendingDebugToggle ||= input.consumeDebugPressed();
-
-    if (pendingDebugToggle) {
-      debugSettings.sunShadow = !debugSettings.sunShadow;
-      pendingDebugToggle = false;
-    }
 
     const movement = input.movement;
     const forwardAmount = Number(movement.forward) - Number(movement.backward);
@@ -193,17 +177,13 @@ renderer.domElement.focus();
     }
 
     camera.update(frameTime, player.getPosition(playerRenderPosition));
-    arena.updateSunShadowDebug(debugSettings.sunShadow);
-    hud.setDebugState(debugSettings);
-    hud.update({
+    gui.update({
       physicsMs: lastPhysicsMs,
       player: player.getTelemetry(),
-      ball: ball.getTelemetry(player),
     });
 
     renderer.render(scene, camera.camera);
-    arena.renderSunShadowDebug(renderer);
-    hud.endFrame();
+    gui.endFrame();
   }
 
   requestAnimationFrame(animationFrame);

@@ -14,7 +14,6 @@ export class InputController {
   private throwPressed = false;
   private throwReleased = false;
   private resetPressed = false;
-  private debugPressed = false;
   private pointerX = window.innerWidth / 2;
   private pointerY = window.innerHeight / 2;
   private hasPointerPosition = false;
@@ -78,12 +77,6 @@ export class InputController {
     return pressed;
   }
 
-  consumeDebugPressed() {
-    const pressed = this.debugPressed;
-    this.debugPressed = false;
-    return pressed;
-  }
-
   getPointerPosition() {
     if (document.pointerLockElement === this.target) {
       return {
@@ -105,9 +98,6 @@ export class InputController {
       }
       if (event.code === "KeyR") {
         this.resetPressed = true;
-      }
-      if (event.code === "Backquote") {
-        this.debugPressed = true;
       }
     }
 

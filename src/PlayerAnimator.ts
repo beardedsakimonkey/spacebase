@@ -88,43 +88,28 @@ export class PlayerAnimator {
   }
 
   reset() {
-    this.jumpStartAnimationTimer = 0;
-    this.landAnimationTimer = 0;
-    this.dashAnimationTimer = 0;
-    this.wallHitAnimationTimer = 0;
-    this.spawnAnimationTimer = 0;
+    this.clearAllTimers();
     this.playAnimation("idle", 0.05);
   }
 
   startDash() {
+    this.clearAllTimers();
     this.dashAnimationTimer = DASH_ANIMATION_SECONDS;
-    this.wallHitAnimationTimer = 0;
-    this.spawnAnimationTimer = 0;
-    this.jumpStartAnimationTimer = 0;
-    this.landAnimationTimer = 0;
   }
 
   startWallHit() {
+    this.clearAllTimers();
     this.wallHitAnimationTimer = WALL_HIT_ANIMATION_SECONDS;
-    this.dashAnimationTimer = 0;
-    this.spawnAnimationTimer = 0;
-    this.jumpStartAnimationTimer = 0;
-    this.landAnimationTimer = 0;
   }
 
   startSpawn() {
+    this.clearAllTimers();
     this.spawnAnimationTimer = SPAWN_ANIMATION_SECONDS;
-    this.wallHitAnimationTimer = 0;
-    this.dashAnimationTimer = 0;
-    this.jumpStartAnimationTimer = 0;
-    this.landAnimationTimer = 0;
   }
 
   startJump() {
+    this.clearAllTimers();
     this.jumpStartAnimationTimer = JUMP_START_ANIMATION_SECONDS;
-    this.wallHitAnimationTimer = 0;
-    this.spawnAnimationTimer = 0;
-    this.landAnimationTimer = 0;
   }
 
   update(dt: number, state: PlayerAnimationFrameState) {
@@ -190,6 +175,14 @@ export class PlayerAnimator {
     }
 
     return new THREE.AnimationClip(clip.name, clip.duration, tracks);
+  }
+
+  private clearAllTimers() {
+    this.jumpStartAnimationTimer = 0;
+    this.landAnimationTimer = 0;
+    this.dashAnimationTimer = 0;
+    this.wallHitAnimationTimer = 0;
+    this.spawnAnimationTimer = 0;
   }
 
   private advanceAndSelectAnimation(

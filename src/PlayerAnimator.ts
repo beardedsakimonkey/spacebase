@@ -1,4 +1,7 @@
 import * as THREE from "three";
+import { characterAnimationAsset, characterMannequinAsset } from "./assets";
+import { loadGltf } from "./util/kaykit";
+import { remapMannequinBodyColor, type MannequinBodyColor } from "./util/mannequin";
 
 type PlayerAnimationName = "idle" | "run" | "jumpStart" | "jumpIdle" | "jumpLand" | "dash";
 
@@ -14,6 +17,9 @@ const ANIMATION_FADE_SECONDS = 0.12;
 const JUMP_START_ANIMATION_SECONDS = 0.28;
 const LAND_ANIMATION_SECONDS = 0.24;
 const DASH_ANIMATION_SECONDS = 0.40;
+const PLAYER_MODEL_SCALE = 1.0;
+const PLAYER_MODEL_OFFSET_Y = -1.1;
+const PLAYER_BODY_COLOR: MannequinBodyColor = "yellow";
 
 export class PlayerAnimator {
   private readonly animationActions = new Map<PlayerAnimationName, THREE.AnimationAction>();
@@ -23,7 +29,31 @@ export class PlayerAnimator {
   private landAnimationTimer = 0;
   private dashAnimationTimer = 0;
 
-  attach(
+  async loadVisualModel(group: THREE.Group) {
+    const [modelGltf, generalGltf, movementGltf, movementAdvancedGltf] = await Promise.all([
+      loadGltf(characterMannequinAsset("medium")),
+      loadGltf(characterAnimationAsset("medium", "general")),
+      loadGltf(characterAnimationAsset("medium", "movement_basic")),
+      loadGltf(characterAnimationAsset("medium", "movement_advanced")),
+    ]);
+
+    const model = modelGltf.scene;
+    model.scale.setScalar(PLAYER_MODEL_SCALE);
+    model.position.y = PLAYER_MODEL_OFFSET_Y;
+    remapMannequinBodyColor(model, PLAYER_BODY_COLOR);
+    model.traverse((node) => {
+      if (node instanceof THREE.Mesh) {
+        node.castShadow = true;
+        // Self-shadowing on the animated mannequin creates visible flicker.
+        node.receiveShadow = false;
+      }
+    });
+    group.add(model);
+
+    this.attach(model, generalGltf.animations, movementGltf.animations, movementAdvancedGltf.animations);
+  }
+
+  private attach(
     model: THREE.Group,
     generalClips: THREE.AnimationClip[],
     movementClips: THREE.AnimationClip[],

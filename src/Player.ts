@@ -19,11 +19,8 @@ import type { Vec3 } from "mathcat";
 import { vec3 } from "mathcat";
 import * as THREE from "three";
 import type { MovementInput } from "./input";
-import { characterAnimationAsset, characterMannequinAsset } from "./assets";
 import { getConveyorVelocity } from "./Conveyor";
-import { remapMannequinBodyColor, type MannequinBodyColor } from "./util/mannequin";
 import { PlayerAnimator } from "./PlayerAnimator";
-import { loadGltf } from "./util/kaykit";
 import type { PhysicsLayers } from "./physics";
 
 export type PlayerTelemetry = {
@@ -56,9 +53,6 @@ function normalizeAngle(angle: number) {
   return angle;
 }
 
-const PLAYER_MODEL_SCALE = 1.0;
-const PLAYER_MODEL_OFFSET_Y = -1.1;
-const PLAYER_BODY_COLOR: MannequinBodyColor = "yellow";
 const MOVE_INPUT_EPSILON = 0.001;
 const MIN_SAFE_DURATION = 0.001;
 const MAX_GROUND_CORRECTION_SPEED = 2;
@@ -254,35 +248,11 @@ export class PlayerController {
   private createVisual() {
     const group = new THREE.Group();
 
-    this.loadVisualModel(group).catch((error: unknown) => {
+    this.animator.loadVisualModel(group).catch((error: unknown) => {
       console.error("Failed to load player mannequin.", error);
     });
 
     return group;
-  }
-
-  private async loadVisualModel(group: THREE.Group) {
-    const [modelGltf, generalGltf, movementGltf, movementAdvancedGltf] = await Promise.all([
-      loadGltf(characterMannequinAsset("medium")),
-      loadGltf(characterAnimationAsset("medium", "general")),
-      loadGltf(characterAnimationAsset("medium", "movement_basic")),
-      loadGltf(characterAnimationAsset("medium", "movement_advanced")),
-    ]);
-
-    const model = modelGltf.scene;
-    model.scale.setScalar(PLAYER_MODEL_SCALE);
-    model.position.y = PLAYER_MODEL_OFFSET_Y;
-    remapMannequinBodyColor(model, PLAYER_BODY_COLOR);
-    model.traverse((node) => {
-      if (node instanceof THREE.Mesh) {
-        node.castShadow = true;
-        // Self-shadowing on the animated mannequin creates visible flicker.
-        node.receiveShadow = false;
-      }
-    });
-    group.add(model);
-
-    this.animator.attach(model, generalGltf.animations, movementGltf.animations, movementAdvancedGltf.animations);
   }
 
   private updateAnimation(dt: number) {

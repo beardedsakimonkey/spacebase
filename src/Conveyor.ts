@@ -26,9 +26,9 @@ const CONVEYOR_TEXTURE_SCROLL_SPEED = 1.2;
 const CONVEYOR_HALF_Y = 0.5;
 const CONVEYOR_Y = -1;
 const CONVEYOR_CENTER_Y = -0.5;
+const CONVEYOR_LONG_HALF_Z = 4;
 
 export const CONVEYOR_HALF_X = 2.1;
-export const CONVEYOR_LONG_HALF_Z = 4;
 
 export async function loadConveyorModel(path: string): Promise<ConveyorModel> {
   const model = await loadGltfScene(path);

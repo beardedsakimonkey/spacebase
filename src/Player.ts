@@ -1,9 +1,13 @@
 import {
   CastRayStatus,
+  CastShapeStatus,
   capsule,
   castRay,
+  castShape,
+  createAllCastShapeCollector,
   createClosestCastRayCollector,
   createDefaultCastRaySettings,
+  createDefaultCastShapeSettings,
   dof,
   filter,
   type Filter,
@@ -34,6 +38,11 @@ type PlayerInputState = {
 
 const rayCollector = createClosestCastRayCollector();
 const raySettings = createDefaultCastRaySettings();
+const dashWallCollector = createAllCastShapeCollector();
+const dashWallSettings = createDefaultCastShapeSettings();
+dashWallSettings.collideWithBackfaces = true;
+dashWallSettings.collideOnlyWithActiveEdges = false;
+dashWallSettings.returnDeepestPoint = true;
 
 const rayOrigin: Vec3 = vec3.create();
 const desiredHorizontal: Vec3 = vec3.create();
@@ -43,7 +52,10 @@ const impulsePoint: Vec3 = vec3.create();
 const groundHitPosition: Vec3 = vec3.create();
 const groundSlopeNormal: Vec3 = vec3.fromValues(0, 1, 0);
 const dashVelocity: Vec3 = vec3.create();
+const dashWallSweep: Vec3 = vec3.create();
+const dashWallNormal: Vec3 = vec3.create();
 const worldUp: Vec3 = vec3.fromValues(0, 1, 0);
+const queryScale: Vec3 = vec3.fromValues(1, 1, 1);
 const visualPosition = new THREE.Vector3();
 const visualForward = new THREE.Vector3();
 
@@ -81,6 +93,13 @@ const RAY_HIT_FORGIVENESS = 0.04;
 const DASH_IMPULSE = 30;
 const DASH_DURATION = 0.44;
 const DASH_COOLDOWN = 0.7;
+const DASH_WALL_SWEEP_PADDING = 0.08;
+const DASH_WALL_MIN_SPEED = 2;
+const DASH_WALL_MIN_HORIZONTAL_NORMAL = 0.45;
+const DASH_WALL_MIN_OPPOSING_DOT = 0.35;
+const DASH_WALL_BOUNCE_SPEED = 8;
+const DASH_WALL_BOUNCE_CONTROL_LOCK = 0.18;
+const DASH_INITIAL_WALL_CHECK_DT = 1 / 60;
 
 export class PlayerController {
   readonly body: RigidBody;
@@ -102,6 +121,7 @@ export class PlayerController {
   private groundRestDistance = CAPSULE_RADIUS;
   private dashTimer = 0;
   private dashCooldownTimer = 0;
+  private dashBounceControlTimer = 0;
   private readonly dashDirection: Vec3 = vec3.fromValues(0, 0, 1);
   private jumpGroundIgnoreTimer = 0;
   private jumpWasHeld = false;
@@ -133,6 +153,7 @@ export class PlayerController {
     });
     this.body.motionProperties.gravityFactor = NORMAL_GRAVITY_SCALE;
     this.queryFilter = filter.create(world.settings.layers);
+    filter.setFromBody(this.queryFilter, world.settings.layers, this.body);
     this.queryFilter.bodyFilter = (body) => body.id !== this.body.id;
     this.object = this.createVisual();
     scene.add(this.object);
@@ -147,6 +168,7 @@ export class PlayerController {
     this.hadGroundContact = this.hasGroundContact;
     this.dashTimer = Math.max(0, this.dashTimer - dt);
     this.dashCooldownTimer = Math.max(0, this.dashCooldownTimer - dt);
+    this.dashBounceControlTimer = Math.max(0, this.dashBounceControlTimer - dt);
     this.jumpGroundIgnoreTimer = Math.max(0, this.jumpGroundIgnoreTimer - dt);
     this.input.wantToJump = input.jump;
     vec3.set(this.input.moveDirection, cameraMoveDirection.x, 0, cameraMoveDirection.z);
@@ -156,7 +178,7 @@ export class PlayerController {
 
     // Dash is an explicit velocity override; otherwise use the softer horizontal motor.
     if (this.dashTimer > 0) {
-      this.applyDashVelocity(world);
+      this.applyDashVelocity(world, dt);
     } else {
       this.applyHorizontalControl(world);
     }
@@ -179,6 +201,7 @@ export class PlayerController {
     this.facingYaw = 0;
     this.dashTimer = 0;
     this.dashCooldownTimer = 0;
+    this.dashBounceControlTimer = 0;
     this.jumpGroundIgnoreTimer = 0;
     this.jumpWasHeld = false;
     this.canAirJump = false;
@@ -211,6 +234,7 @@ export class PlayerController {
     this.facingYaw = Math.atan2(this.dashDirection[0], this.dashDirection[2]);
     this.dashTimer = DASH_DURATION;
     this.dashCooldownTimer = DASH_COOLDOWN;
+    this.dashBounceControlTimer = 0;
     if (!this.hasGroundContact) {
       this.airDashUsed = true;
     }
@@ -355,6 +379,10 @@ export class PlayerController {
   }
 
   private applyHorizontalControl(world: World) {
+    if (this.dashBounceControlTimer > 0) {
+      return;
+    }
+
     const hasMoveInput = this.hasMoveInput();
     if (!hasMoveInput && !this.canGroundJump) {
       // Preserve airborne momentum when the player releases movement input.
@@ -399,16 +427,87 @@ export class PlayerController {
     rigidBody.addImpulseAtPosition(world, this.body, horizontalImpulse, impulsePoint);
   }
 
-  private applyDashVelocity(world: World) {
+  private applyDashVelocity(world: World, dt = DASH_INITIAL_WALL_CHECK_DT) {
     const velocity = this.body.motionProperties.linearVelocity;
     const dashDuration = Math.max(MIN_SAFE_DURATION, DASH_DURATION);
     const dashSpeed = DASH_IMPULSE * Math.max(0, Math.min(1, this.dashTimer / dashDuration));
+
+    if (this.tryBounceOffDashWall(world, dashSpeed, dt)) {
+      return;
+    }
 
     // Dash input is locked, so speed decays across the committed dash instead of being re-applied flat.
     dashVelocity[0] = this.dashDirection[0] * dashSpeed;
     dashVelocity[1] = velocity[1];
     dashVelocity[2] = this.dashDirection[2] * dashSpeed;
     rigidBody.setLinearVelocity(world, this.body, dashVelocity);
+  }
+
+  private tryBounceOffDashWall(world: World, dashSpeed: number, dt: number) {
+    if (dashSpeed < DASH_WALL_MIN_SPEED) {
+      return false;
+    }
+
+    const sweepDistance = dashSpeed * Math.max(dt, MIN_SAFE_DURATION) + DASH_WALL_SWEEP_PADDING;
+    vec3.scale(dashWallSweep, this.dashDirection, sweepDistance);
+
+    dashWallCollector.reset();
+    castShape(
+      world,
+      dashWallCollector,
+      dashWallSettings,
+      this.body.shape,
+      this.body.position,
+      this.body.quaternion,
+      queryScale,
+      dashWallSweep,
+      this.queryFilter,
+    );
+
+    let closestWallFraction = Infinity;
+    let hasWallHit = false;
+
+    for (const hit of dashWallCollector.hits) {
+      if (hit.status !== CastShapeStatus.COLLIDING) {
+        continue;
+      }
+
+      const hitBody = rigidBody.get(world, hit.bodyIdB);
+      if (!hitBody || hitBody.motionType === MotionType.DYNAMIC) {
+        continue;
+      }
+
+      const horizontalNormalLength = Math.hypot(hit.normal[0], hit.normal[2]);
+      if (horizontalNormalLength < DASH_WALL_MIN_HORIZONTAL_NORMAL) {
+        continue;
+      }
+
+      const normalX = hit.normal[0] / horizontalNormalLength;
+      const normalZ = hit.normal[2] / horizontalNormalLength;
+      const opposingDot = -(normalX * this.dashDirection[0] + normalZ * this.dashDirection[2]);
+      if (opposingDot < DASH_WALL_MIN_OPPOSING_DOT || hit.fraction >= closestWallFraction) {
+        continue;
+      }
+
+      closestWallFraction = hit.fraction;
+      dashWallNormal[0] = normalX;
+      dashWallNormal[1] = 0;
+      dashWallNormal[2] = normalZ;
+      hasWallHit = true;
+    }
+
+    if (!hasWallHit) {
+      return false;
+    }
+
+    const velocity = this.body.motionProperties.linearVelocity;
+    dashVelocity[0] = dashWallNormal[0] * DASH_WALL_BOUNCE_SPEED;
+    dashVelocity[1] = velocity[1];
+    dashVelocity[2] = dashWallNormal[2] * DASH_WALL_BOUNCE_SPEED;
+    rigidBody.setLinearVelocity(world, this.body, dashVelocity);
+    this.dashTimer = 0;
+    this.dashBounceControlTimer = DASH_WALL_BOUNCE_CONTROL_LOCK;
+    return true;
   }
 
   private applyGroundContactCorrection(world: World) {

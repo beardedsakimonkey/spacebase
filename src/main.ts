@@ -1,4 +1,5 @@
 import { updateWorld } from "crashcat";
+import { debugRenderer } from "crashcat/three";
 import * as THREE from "three";
 import "./styles.css";
 import { Arena } from "./Arena";
@@ -9,6 +10,8 @@ import { PlayerController } from "./Player";
 import { createPhysicsContext, syncPhysicsEntities } from "./physics";
 
 const PHYSICS_DT = 1 / 60;
+const PHYSICS_DEBUG_RENDER_ORDER = 1000;
+const configuredDebugMaterials = new WeakSet<THREE.Material>();
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) {
@@ -27,9 +30,38 @@ renderer.domElement.tabIndex = 0;
 app.append(renderer.domElement);
 renderer.domElement.focus();
 
+function configurePhysicsDebugObject(object: THREE.Object3D) {
+  object.traverse((child) => {
+    if (!(child instanceof THREE.LineSegments)) {
+      return;
+    }
+
+    child.renderOrder = PHYSICS_DEBUG_RENDER_ORDER;
+    const materials = Array.isArray(child.material) ? child.material : [child.material];
+    for (const material of materials) {
+      if (configuredDebugMaterials.has(material)) {
+        continue;
+      }
+      material.depthTest = false;
+      material.depthWrite = false;
+      material.needsUpdate = true;
+      configuredDebugMaterials.add(material);
+    }
+  });
+}
+
 (async () => {
   const scene = new THREE.Scene();
   const physics = createPhysicsContext();
+  const physicsDebugOptions = debugRenderer.createDefaultOptions();
+  physicsDebugOptions.bodies.enabled = true;
+  physicsDebugOptions.bodies.wireframe = true;
+  physicsDebugOptions.bodies.color = debugRenderer.BodyColorMode.MOTION_TYPE;
+
+  const physicsDebug = debugRenderer.init(physicsDebugOptions);
+  physicsDebug.object3d.visible = false;
+  scene.add(physicsDebug.object3d);
+
   const camera = new Camera(
     window.innerWidth / window.innerHeight,
     physics.world,
@@ -92,6 +124,12 @@ renderer.domElement.focus();
     }
 
     camera.update(frameTime, player.getPosition(playerRenderPosition));
+    physicsDebug.object3d.visible = gui.physicsDebugWireframes;
+    if (gui.physicsDebugWireframes) {
+      debugRenderer.update(physicsDebug, physics.world);
+      configurePhysicsDebugObject(physicsDebug.object3d);
+    }
+
     gui.update({
       physicsMs: lastPhysicsMs,
       player: player.getTelemetry(),

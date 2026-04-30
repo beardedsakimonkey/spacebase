@@ -10,6 +10,7 @@ export type GuiStats = {
 type GuiValues = {
   physicsMs: string;
   speed: string;
+  physicsWireframes: boolean;
 };
 
 export class Gui {
@@ -22,10 +23,16 @@ export class Gui {
     this.values = {
       physicsMs: "-",
       speed: "-",
+      physicsWireframes: false,
     };
 
     this.configureStatsPanel();
     this.createReadouts();
+    this.createDebugOptions();
+  }
+
+  get physicsDebugWireframes() {
+    return this.values.physicsWireframes;
   }
 
   beginFrame() {
@@ -60,5 +67,10 @@ export class Gui {
       folder.add(this.values, "physicsMs").name("Physics").disable(),
       folder.add(this.values, "speed").name("Speed").disable(),
     );
+  }
+
+  private createDebugOptions() {
+    const folder = this.gui.addFolder("Debug");
+    folder.add(this.values, "physicsWireframes").name("Physics Wireframes");
   }
 }

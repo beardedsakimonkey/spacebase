@@ -66,7 +66,7 @@ const RESPAWN_Y = -14;
 const PLAYER_SPAWN_POSITION: Vec3 = [0, 3.5, 0];
 const CAPSULE_RADIUS = 0.58;
 const CAPSULE_HALF_HEIGHT = 0.51;
-const PLAYER_ALLOWED_DEGREES_OF_FREEDOM = dof(true, true, true, false, true, false);
+const PLAYER_ALLOWED_DEGREES_OF_FREEDOM = dof(true, true, true, false, false, false);
 const MAX_RUN_SPEED = 7;
 const ACCELERATION_TIME = 7.5;
 const TURN_SPEED = 9;
@@ -135,7 +135,7 @@ export class PlayerController {
       mass: 1,
       // Dash speeds can cross thin walls in one tick; linear CCD sweeps the capsule along its motion.
       motionQuality: MotionQuality.LINEAR_CAST,
-      // Lock roll/pitch at the solver level; no spring impulse is applied to rebalance the body.
+      // Lock rotation at the solver level; visual facing is controlled separately.
       allowedDegreesOfFreedom: PLAYER_ALLOWED_DEGREES_OF_FREEDOM,
     });
     this.body.motionProperties.gravityFactor = NORMAL_GRAVITY_SCALE;

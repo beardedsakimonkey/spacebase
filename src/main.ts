@@ -84,6 +84,7 @@ function configurePhysicsDebugObject(object: THREE.Object3D) {
   let accumulator = 0;
   let elapsed = 0;
   let pendingDash = false;
+  let pendingRespawn = false;
 
   function animationFrame(now: number) {
     requestAnimationFrame(animationFrame);
@@ -96,6 +97,7 @@ function configurePhysicsDebugObject(object: THREE.Object3D) {
     const lookDelta = input.consumeLookDelta();
     camera.applyLookDelta(lookDelta.yaw, lookDelta.pitch);
     pendingDash ||= input.consumeDashPressed();
+    pendingRespawn ||= input.consumeRespawnPressed();
 
     const movement = input.movement;
     const forwardAmount = Number(movement.forward) - Number(movement.backward);
@@ -103,6 +105,11 @@ function configurePhysicsDebugObject(object: THREE.Object3D) {
     const moveDirection = camera.getMoveDirection(forwardAmount, rightAmount);
 
     while (accumulator >= PHYSICS_DT) {
+      if (pendingRespawn) {
+        player.reset(physics.world);
+        pendingRespawn = false;
+      }
+
       arena.update(elapsed, PHYSICS_DT);
       player.update(physics.world, movement, moveDirection, PHYSICS_DT);
 

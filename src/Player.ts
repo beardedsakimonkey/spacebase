@@ -158,6 +158,7 @@ export class PlayerController {
     this.queryFilter.bodyFilter = (body) => body.id !== this.body.id;
     this.object = this.createVisual();
     scene.add(this.object);
+    this.animator.startSpawn();
   }
 
   update(
@@ -214,6 +215,7 @@ export class PlayerController {
     this.groundDistance = 0;
     this.groundRestDistance = CAPSULE_RADIUS;
     this.animator.reset();
+    this.animator.startSpawn();
   }
 
   dash(world: World) {

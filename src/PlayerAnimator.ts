@@ -3,7 +3,15 @@ import { characterAnimationAsset, characterMannequinAsset } from "./assets";
 import { loadGltf } from "./util/kaykit";
 import { remapMannequinBodyColor, type MannequinBodyColor } from "./util/mannequin";
 
-type PlayerAnimationName = "idle" | "run" | "jumpStart" | "jumpIdle" | "jumpLand" | "dash" | "wallHit";
+type PlayerAnimationName =
+  | "idle"
+  | "run"
+  | "jumpStart"
+  | "jumpIdle"
+  | "jumpLand"
+  | "dash"
+  | "wallHit"
+  | "spawn";
 
 export type PlayerAnimationFrameState = {
   hadGroundContact: boolean;
@@ -20,6 +28,7 @@ const LAND_ANIMATION_SECONDS = 0.24;
 const DASH_ANIMATION_SECONDS = 0.40;
 const WALL_HIT_ANIMATION_SECONDS = 0.5;
 const WALL_HIT_ANIMATION_START_TIME = 0.18;
+const SPAWN_ANIMATION_SECONDS = 1.3;
 const PLAYER_MODEL_SCALE = 1.0;
 const PLAYER_MODEL_OFFSET_Y = -1.1;
 const PLAYER_BODY_COLOR: MannequinBodyColor = "yellow";
@@ -32,6 +41,7 @@ export class PlayerAnimator {
   private landAnimationTimer = 0;
   private dashAnimationTimer = 0;
   private wallHitAnimationTimer = 0;
+  private spawnAnimationTimer = 0;
 
   async loadVisualModel(group: THREE.Group) {
     const [modelGltf, generalGltf, movementGltf, movementAdvancedGltf] = await Promise.all([
@@ -68,6 +78,7 @@ export class PlayerAnimator {
     this.activeAnimation = null;
     this.bindAnimation("idle", model, generalClips, "Idle_A");
     this.bindAnimation("wallHit", model, generalClips, "Hit_B", true);
+    this.bindAnimation("spawn", model, generalClips, "Spawn_Ground", true);
     this.bindAnimation("run", model, movementClips, "Running_B");
     this.bindAnimation("jumpStart", model, movementClips, "Jump_Start", true);
     this.bindAnimation("jumpIdle", model, movementClips, "Jump_Idle");
@@ -81,18 +92,29 @@ export class PlayerAnimator {
     this.landAnimationTimer = 0;
     this.dashAnimationTimer = 0;
     this.wallHitAnimationTimer = 0;
+    this.spawnAnimationTimer = 0;
     this.playAnimation("idle", 0.05);
   }
 
   startDash() {
     this.dashAnimationTimer = DASH_ANIMATION_SECONDS;
     this.wallHitAnimationTimer = 0;
+    this.spawnAnimationTimer = 0;
     this.jumpStartAnimationTimer = 0;
     this.landAnimationTimer = 0;
   }
 
   startWallHit() {
     this.wallHitAnimationTimer = WALL_HIT_ANIMATION_SECONDS;
+    this.dashAnimationTimer = 0;
+    this.spawnAnimationTimer = 0;
+    this.jumpStartAnimationTimer = 0;
+    this.landAnimationTimer = 0;
+  }
+
+  startSpawn() {
+    this.spawnAnimationTimer = SPAWN_ANIMATION_SECONDS;
+    this.wallHitAnimationTimer = 0;
     this.dashAnimationTimer = 0;
     this.jumpStartAnimationTimer = 0;
     this.landAnimationTimer = 0;
@@ -101,6 +123,7 @@ export class PlayerAnimator {
   startJump() {
     this.jumpStartAnimationTimer = JUMP_START_ANIMATION_SECONDS;
     this.wallHitAnimationTimer = 0;
+    this.spawnAnimationTimer = 0;
     this.landAnimationTimer = 0;
   }
 
@@ -187,6 +210,11 @@ export class PlayerAnimator {
     if (this.jumpStartAnimationTimer > 0) {
       this.jumpStartAnimationTimer = Math.max(0, this.jumpStartAnimationTimer - dt);
       return "jumpStart";
+    }
+
+    if (this.spawnAnimationTimer > 0) {
+      this.spawnAnimationTimer = Math.max(0, this.spawnAnimationTimer - dt);
+      return "spawn";
     }
 
     if (this.landAnimationTimer > 0) {

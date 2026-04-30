@@ -11,6 +11,7 @@ const RAW_POINTER_MOUSEMOVE_SUPPRESSION_MS = 50;
 export class InputController {
   private readonly keys = new Set<string>();
   private dashPressed = false;
+  private respawnPressed = false;
   private pointerX = window.innerWidth / 2;
   private pointerY = window.innerHeight / 2;
   private yawDelta = 0;
@@ -55,6 +56,12 @@ export class InputController {
     return pressed;
   }
 
+  consumeRespawnPressed() {
+    const pressed = this.respawnPressed;
+    this.respawnPressed = false;
+    return pressed;
+  }
+
   getPointerPosition() {
     if (document.pointerLockElement === this.target) {
       return {
@@ -72,6 +79,10 @@ export class InputController {
   private handleKeyDown(event: KeyboardEvent) {
     if (["Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.code)) {
       event.preventDefault();
+    }
+
+    if (event.code === "KeyR" && !event.repeat) {
+      this.respawnPressed = true;
     }
 
     this.keys.add(event.code);

@@ -3,8 +3,8 @@ import * as THREE from "three";
 type PlayerAnimationName = "idle" | "run" | "jumpStart" | "jumpIdle" | "jumpLand" | "dash";
 
 export type PlayerAnimationFrameState = {
-  wasOnGround: boolean;
-  isOnGround: boolean;
+  hadGroundContact: boolean;
+  hasGroundContact: boolean;
   wantsRunAnimation: boolean;
   horizontalSpeed: number;
 };
@@ -64,11 +64,11 @@ export class PlayerAnimator {
       return;
     }
 
-    if (!state.wasOnGround && state.isOnGround) {
+    if (!state.hadGroundContact && state.hasGroundContact) {
       this.landAnimationTimer = LAND_ANIMATION_SECONDS;
     }
 
-    const desired = this.advanceAndSelectAnimation(state.wantsRunAnimation, state.isOnGround, dt);
+    const desired = this.advanceAndSelectAnimation(state.wantsRunAnimation, state.hasGroundContact, dt);
     const action = this.animationActions.get(desired);
     if (action && desired === "run") {
       action.timeScale = THREE.MathUtils.clamp(state.horizontalSpeed / RUN_ANIMATION_BASE_SPEED, 0.8, 1.65);
@@ -126,7 +126,7 @@ export class PlayerAnimator {
 
   private advanceAndSelectAnimation(
     wantsRunAnimation: boolean,
-    isOnGround: boolean,
+    hasGroundContact: boolean,
     dt: number,
   ): PlayerAnimationName {
     if (this.dashAnimationTimer > 0) {
@@ -144,7 +144,7 @@ export class PlayerAnimator {
       return "jumpLand";
     }
 
-    if (!isOnGround) {
+    if (!hasGroundContact) {
       return "jumpIdle";
     }
 

@@ -53,6 +53,8 @@ const deltaVelocity: Vec3 = vec3.create();
 const moveImpulse: Vec3 = vec3.create();
 const impulsePoint: Vec3 = vec3.create();
 const dragImpulse: Vec3 = vec3.create();
+const groundHitPosition: Vec3 = vec3.create();
+const groundSlopeNormal: Vec3 = vec3.fromValues(0, 1, 0);
 const bodyUp: Vec3 = vec3.create();
 const bodyForward: Vec3 = vec3.create();
 const desiredForward: Vec3 = vec3.create();
@@ -111,14 +113,9 @@ export class PlayerController {
 
   // Stable authored facing, decoupled from the dynamic body's noisy collision rotation.
   private facingYaw = 0;
-  private isOnGround = false;
-  private canJump = false;
-  private wasOnGround = false;
-  private actualSlopeNormal: Vec3 = vec3.fromValues(0, 1, 0);
-  private actualSlopeAngle = 0;
-  private groundBodyId: number | null = null;
-  private groundSubShapeId = 0;
-  private groundPosition: Vec3 = vec3.create();
+  private hasGroundContact = false;
+  private canGroundJump = false;
+  private hadGroundContact = false;
   private readonly groundSurfaceVelocity: Vec3 = vec3.create();
   private groundDistance = 0;
   private dashTimer = 0;
@@ -164,7 +161,7 @@ export class PlayerController {
     cameraMoveDirection: THREE.Vector3,
     dt: number,
   ) {
-    this.wasOnGround = this.isOnGround;
+    this.hadGroundContact = this.hasGroundContact;
     this.dashTimer = Math.max(0, this.dashTimer - dt);
     this.dashCooldownTimer = Math.max(0, this.dashCooldownTimer - dt);
     this.jumpGroundIgnoreTimer = Math.max(0, this.jumpGroundIgnoreTimer - dt);
@@ -207,14 +204,9 @@ export class PlayerController {
     this.jumpWasHeld = false;
     this.airJumpsRemaining = 0;
     this.airDashUsed = false;
-    this.isOnGround = false;
-    this.canJump = false;
-    this.wasOnGround = false;
-    vec3.set(this.actualSlopeNormal, 0, 1, 0);
-    this.actualSlopeAngle = 0;
-    this.groundBodyId = null;
-    this.groundSubShapeId = 0;
-    vec3.set(this.groundPosition, 0, 0, 0);
+    this.hasGroundContact = false;
+    this.canGroundJump = false;
+    this.hadGroundContact = false;
     vec3.set(this.groundSurfaceVelocity, 0, 0, 0);
     this.groundDistance = 0;
     this.animator.reset();
@@ -224,7 +216,7 @@ export class PlayerController {
     if (this.dashCooldownTimer > 0) {
       return false;
     }
-    if (!this.isOnGround && this.airDashUsed) {
+    if (!this.hasGroundContact && this.airDashUsed) {
       return false;
     }
 
@@ -238,7 +230,7 @@ export class PlayerController {
     }
     this.dashTimer = DASH_DURATION;
     this.dashCooldownTimer = DASH_COOLDOWN;
-    if (!this.isOnGround) {
+    if (!this.hasGroundContact) {
       this.airDashUsed = true;
     }
     this.animator.startDash();
@@ -255,17 +247,12 @@ export class PlayerController {
     return out.set(Math.sin(this.facingYaw), 0, Math.cos(this.facingYaw)).normalize();
   }
 
-  getVelocity(out = new THREE.Vector3()) {
-    const velocity = this.body.motionProperties.linearVelocity;
-    return out.set(velocity[0], velocity[1], velocity[2]);
-  }
-
   private hasMoveInput() {
     return vec3.length(this.input.moveDirection) > MOVE_INPUT_EPSILON;
   }
 
   private canUseJump() {
-    return this.canJump || (!this.isOnGround && this.airJumpsRemaining > 0);
+    return this.canGroundJump || (!this.hasGroundContact && this.airJumpsRemaining > 0);
   }
 
   getTelemetry(): PlayerTelemetry {
@@ -313,8 +300,8 @@ export class PlayerController {
   private updateAnimation(dt: number) {
     const velocity = this.body.motionProperties.linearVelocity;
     this.animator.update(dt, {
-      wasOnGround: this.wasOnGround,
-      isOnGround: this.isOnGround,
+      hadGroundContact: this.hadGroundContact,
+      hasGroundContact: this.hasGroundContact,
       wantsRunAnimation: this.hasMoveInput() || this.dashTimer > 0,
       horizontalSpeed: Math.hypot(velocity[0], velocity[2]),
     });
@@ -330,15 +317,13 @@ export class PlayerController {
   }
 
   private updateGround(world: World) {
-    vec3.set(this.actualSlopeNormal, 0, 1, 0);
-    this.actualSlopeAngle = 0;
-    this.canJump = false;
+    vec3.set(groundSlopeNormal, 0, 1, 0);
+    this.canGroundJump = false;
     vec3.set(this.groundSurfaceVelocity, 0, 0, 0);
 
     if (this.jumpGroundIgnoreTimer > 0) {
       // Fresh jumps ignore nearby ground so grounded snap cannot pull the player back down.
-      this.isOnGround = false;
-      this.groundBodyId = null;
+      this.hasGroundContact = false;
       this.groundDistance = 0;
       return;
     }
@@ -358,31 +343,30 @@ export class PlayerController {
       : Infinity;
 
     if (hitDistance >= CAPSULE_RADIUS + RAY_HIT_FORGIVENESS) {
-      this.isOnGround = false;
-      this.groundBodyId = null;
+      this.hasGroundContact = false;
       this.groundDistance = 0;
       return;
     }
 
-    this.isOnGround = true;
+    this.hasGroundContact = true;
     this.groundDistance = hitDistance;
-    vec3.set(this.groundPosition, rayOrigin[0], rayOrigin[1] - hitDistance, rayOrigin[2]);
-    this.groundBodyId = rayCollector.hit.bodyIdB;
-    this.groundSubShapeId = rayCollector.hit.subShapeId;
+    vec3.set(groundHitPosition, rayOrigin[0], rayOrigin[1] - hitDistance, rayOrigin[2]);
+    const groundBodyId = rayCollector.hit.bodyIdB;
+    const groundSubShapeId = rayCollector.hit.subShapeId;
 
     // Ground state comes only from center contact; forward probes made ledges feel sticky.
-    const groundBody = rigidBody.get(world, this.groundBodyId);
+    const groundBody = rigidBody.get(world, groundBodyId);
     if (groundBody) {
       const conveyorVelocity = getConveyorVelocity(groundBody);
       if (conveyorVelocity) {
         vec3.set(this.groundSurfaceVelocity, conveyorVelocity[0], conveyorVelocity[1], conveyorVelocity[2]);
       }
-      rigidBody.getSurfaceNormal(this.actualSlopeNormal, groundBody, this.groundPosition, this.groundSubShapeId);
-      this.actualSlopeAngle = Math.acos(
-        THREE.MathUtils.clamp(vec3.dot(this.actualSlopeNormal, worldUp), -1, 1),
+      rigidBody.getSurfaceNormal(groundSlopeNormal, groundBody, groundHitPosition, groundSubShapeId);
+      const slopeAngle = Math.acos(
+        THREE.MathUtils.clamp(vec3.dot(groundSlopeNormal, worldUp), -1, 1),
       );
-      this.canJump = this.actualSlopeAngle < MAX_SLOPE_ANGLE;
-      if (this.canJump) {
+      this.canGroundJump = slopeAngle < MAX_SLOPE_ANGLE;
+      if (this.canGroundJump) {
         this.airJumpsRemaining = 1;
         this.airDashUsed = false;
       }
@@ -409,7 +393,7 @@ export class PlayerController {
     deltaVelocity[1] = 0;
     deltaVelocity[2] = desiredHorizontal[2] - currentHorizontal[2];
 
-    const air = this.canJump ? 1 : AIR_CONTROL_FACTOR;
+    const air = this.canGroundJump ? 1 : AIR_CONTROL_FACTOR;
     const acceleration = 1 / Math.max(MIN_SAFE_DURATION, ACCELERATION_TIME);
 
     moveImpulse[0] = deltaVelocity[0] * acceleration * air;
@@ -437,7 +421,7 @@ export class PlayerController {
 
   private applyLandingDamping(world: World) {
     const velocity = this.body.motionProperties.linearVelocity;
-    if (!this.wasOnGround && this.isOnGround && velocity[1] < 0) {
+    if (!this.hadGroundContact && this.hasGroundContact && velocity[1] < 0) {
       // Landing should settle into contact instead of rebounding from downward velocity.
       rigidBody.setLinearVelocity(world, this.body, [
         velocity[0],
@@ -448,7 +432,7 @@ export class PlayerController {
   }
 
   private applyDragImpulse(world: World) {
-    if (!this.canJump) {
+    if (!this.canGroundJump) {
       return;
     }
     const velocity = this.body.motionProperties.linearVelocity;
@@ -459,7 +443,7 @@ export class PlayerController {
   }
 
   private applyGroundContactCorrection(world: World) {
-    if (!this.isOnGround || this.groundBodyId === null) {
+    if (!this.hasGroundContact) {
       return;
     }
 
@@ -516,7 +500,7 @@ export class PlayerController {
       return;
     }
 
-    if (!this.canJump) {
+    if (!this.canGroundJump) {
       // Ground contact refills this budget; airborne jumps spend it until the next valid landing.
       this.airJumpsRemaining = Math.max(0, this.airJumpsRemaining - 1);
     }
@@ -524,7 +508,7 @@ export class PlayerController {
     const velocity = this.body.motionProperties.linearVelocity;
     rigidBody.setLinearVelocity(world, this.body, [velocity[0], JUMP_VELOCITY, velocity[2]]);
     this.jumpGroundIgnoreTimer = JUMP_GROUND_IGNORE_TIME;
-    this.canJump = false;
+    this.canGroundJump = false;
     this.animator.startJump();
   }
 
@@ -532,7 +516,7 @@ export class PlayerController {
     const verticalVelocity = this.body.motionProperties.linearVelocity[1];
     if (verticalVelocity < -MAX_FALL_SPEED) {
       this.body.motionProperties.gravityFactor = 0;
-    } else if (verticalVelocity < 0 && !this.canJump) {
+    } else if (verticalVelocity < 0 && !this.canGroundJump) {
       this.body.motionProperties.gravityFactor = FALLING_GRAVITY_SCALE;
     } else {
       this.body.motionProperties.gravityFactor = NORMAL_GRAVITY_SCALE;

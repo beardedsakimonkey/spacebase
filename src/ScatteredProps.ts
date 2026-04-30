@@ -4,6 +4,7 @@ import {
   MotionType,
   offsetCenterOfMass,
   rigidBody,
+  sphere,
   type World,
 } from "crashcat";
 import type { Quat, Vec3 } from "mathcat";
@@ -22,24 +23,36 @@ type ModelTransform = {
   scale?: number;
 };
 
-export type ScatteredPropPlacement = ModelTransform & {
+type BaseScatteredPropPlacement = ModelTransform & {
   model: PlatformerNeutralModel;
-  halfExtents: Vec3;
   dynamic?: boolean;
   friction?: number;
   restitution?: number;
   mass?: number;
-  offset?: Vec3;
   linearDamping?: number;
   angularDamping?: number;
 };
+
+type BoxScatteredPropPlacement = BaseScatteredPropPlacement & {
+  halfExtents: Vec3;
+  offset?: Vec3;
+  radius?: never;
+};
+
+type SphereScatteredPropPlacement = BaseScatteredPropPlacement & {
+  radius: number;
+  halfExtents?: never;
+  offset?: never;
+};
+
+export type ScatteredPropPlacement = BoxScatteredPropPlacement | SphereScatteredPropPlacement;
 
 export type ScatteredPropModels = Map<PlatformerNeutralModel, THREE.Group>;
 
 const FLOOR_TOP = 0;
 const SECOND_STORY_TOP = 4;
 
-const CONE: Omit<ScatteredPropPlacement, "x" | "y" | "z" | "ry"> = {
+const CONE: Omit<BoxScatteredPropPlacement, "x" | "y" | "z" | "ry"> = {
   model: "cone",
   halfExtents: [0.28, 0.33, 0.28],
   dynamic: true,
@@ -52,6 +65,19 @@ const CONE: Omit<ScatteredPropPlacement, "x" | "y" | "z" | "ry"> = {
 };
 
 export const SCATTERED_PROPS: ScatteredPropPlacement[] = [
+  {
+    model: "ball",
+    x: 0,
+    y: 1.8,
+    z: -2.5,
+    radius: 1,
+    dynamic: true,
+    friction: 1.6,
+    restitution: 0.55,
+    mass: 0.85,
+    linearDamping: 0.04,
+    angularDamping: 0.2,
+  },
   {
     ...CONE,
     x: -15.5,
@@ -192,9 +218,11 @@ function addDynamicProp(
 ) {
   const object = new THREE.Group();
   const visual = model.clone(true);
-  const bodyY = placement.y + placement.halfExtents[1];
+  const bodyY = getDynamicBodyY(placement);
 
-  visual.position.y = -placement.halfExtents[1];
+  if (isBoxPlacement(placement)) {
+    visual.position.y = -placement.halfExtents[1];
+  }
   if (placement.scale !== undefined) {
     visual.scale.setScalar(placement.scale);
   }
@@ -204,13 +232,8 @@ function addDynamicProp(
   object.add(visual);
   scene.add(object);
 
-  const baseShape = box.create({ halfExtents: placement.halfExtents, convexRadius: 0.03 });
-  const shape = placement.offset
-    ? offsetCenterOfMass.create({ shape: baseShape, offset: placement.offset })
-    : baseShape;
-
   const body = rigidBody.create(world, {
-    shape,
+    shape: createDynamicShape(placement),
     motionType: MotionType.DYNAMIC,
     objectLayer: layers.props,
     position: [placement.x, bodyY, placement.z],
@@ -232,6 +255,10 @@ function addStaticProp(
   model: THREE.Group,
   placement: ScatteredPropPlacement,
 ) {
+  if (!isBoxPlacement(placement)) {
+    throw new Error(`Static scattered prop requires box half extents: ${placement.model}`);
+  }
+
   const object = model.clone(true);
   object.position.set(placement.x, placement.y, placement.z);
   object.quaternion.fromArray(placementQuaternion(placement));
@@ -253,6 +280,25 @@ function addStaticProp(
     friction: placement.friction ?? 1,
     restitution: placement.restitution ?? 0.08,
   });
+}
+
+function createDynamicShape(placement: ScatteredPropPlacement) {
+  if (!isBoxPlacement(placement)) {
+    return sphere.create({ radius: placement.radius });
+  }
+
+  const baseShape = box.create({ halfExtents: placement.halfExtents, convexRadius: 0.03 });
+  return placement.offset
+    ? offsetCenterOfMass.create({ shape: baseShape, offset: placement.offset })
+    : baseShape;
+}
+
+function getDynamicBodyY(placement: ScatteredPropPlacement) {
+  return isBoxPlacement(placement) ? placement.y + placement.halfExtents[1] : placement.y;
+}
+
+function isBoxPlacement(placement: ScatteredPropPlacement): placement is BoxScatteredPropPlacement {
+  return placement.halfExtents !== undefined;
 }
 
 function placementQuaternion(placement: Pick<ModelTransform, "rx" | "ry" | "rz">): Quat {

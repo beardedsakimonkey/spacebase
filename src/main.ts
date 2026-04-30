@@ -2,7 +2,6 @@ import { updateWorld } from "crashcat";
 import * as THREE from "three";
 import "./styles.css";
 import { Arena } from "./Arena";
-import { BallController } from "./Ball";
 import { Camera } from "./Camera";
 import { Gui } from "./gui";
 import { InputController } from "./input";
@@ -39,7 +38,6 @@ renderer.domElement.focus();
   const input = new InputController(renderer.domElement);
   const arena = await Arena.create(physics.world, physics.layers, scene);
   const player = new PlayerController(physics.world, physics.layers, scene);
-  const ball = new BallController(physics.world, physics.layers, scene);
   const playerRenderPosition = new THREE.Vector3();
 
   const gui = new Gui();
@@ -88,7 +86,6 @@ renderer.domElement.focus();
 
       syncPhysicsEntities(arena.entities);
       player.syncVisual();
-      ball.syncVisual();
 
       elapsed += PHYSICS_DT;
       accumulator -= PHYSICS_DT;

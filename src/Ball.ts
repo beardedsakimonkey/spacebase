@@ -6,20 +6,13 @@ import { loadGltfScene } from "./util/kaykit";
 import type { PhysicsLayers } from "./physics";
 import type { PlayerController } from "./Player";
 
-type BallTuning = {
-  pickupRange: number;
-  holdDistance: number;
-  holdHeight: number;
-  holdFollowStrength: number;
-  throwStrength: number;
-  throwMinPower: number;
-  throwUpward: number;
-};
-
-export type BallTelemetry = {
-  held: boolean;
-  distance: number;
-};
+const PICKUP_RANGE = 2.15;
+const HOLD_DISTANCE = 1.25;
+const HOLD_HEIGHT = 0.4;
+const HOLD_FOLLOW_STRENGTH = 16;
+const THROW_STRENGTH = 34;
+const THROW_MIN_POWER = 0.45;
+const THROW_UPWARD = 7;
 
 const spawnPosition: Vec3 = [0, 1.8, -2.5];
 const ballVelocity: Vec3 = [0, 0, 0];
@@ -28,20 +21,9 @@ const launchDirection = new THREE.Vector3();
 const spinAxis = new THREE.Vector3();
 const fallbackDirection = new THREE.Vector3();
 
-const BALL_TUNING: Readonly<BallTuning> = {
-  pickupRange: 2.15,
-  holdDistance: 1.25,
-  holdHeight: 0.4,
-  holdFollowStrength: 16,
-  throwStrength: 34,
-  throwMinPower: 0.45,
-  throwUpward: 7,
-};
-
 export class BallController {
   readonly body: RigidBody;
   readonly object: THREE.Group;
-  readonly tuning: Readonly<BallTuning>;
 
   private held = false;
   private pickupCooldown = 0;
@@ -52,12 +34,11 @@ export class BallController {
   private readonly playerForward = new THREE.Vector3();
   private readonly playerVelocity = new THREE.Vector3();
 
-  constructor(world: World, layers: PhysicsLayers, scene: THREE.Scene, tuning = BALL_TUNING) {
-    this.tuning = tuning;
+  constructor(world: World, layers: PhysicsLayers, scene: THREE.Scene) {
     this.propLayer = layers.props;
     this.heldLayer = layers.heldProp;
     this.body = rigidBody.create(world, {
-      shape: sphere.create({ radius: 0.52 }),
+      shape: sphere.create({ radius: 1 }),
       motionType: MotionType.DYNAMIC,
       objectLayer: layers.props,
       position: spawnPosition,
@@ -73,8 +54,6 @@ export class BallController {
     scene.add(this.object);
 
     loadGltfScene(platformerNeutralAsset("ball")).then((model) => {
-      // KayKit ball is radius 1; scale to match physics radius 0.52
-      model.scale.setScalar(0.52);
       model.traverse((node) => {
         if (node instanceof THREE.Mesh) {
           node.castShadow = true;
@@ -88,7 +67,7 @@ export class BallController {
   update(world: World, player: PlayerController, dt: number) {
     this.pickupCooldown = Math.max(0, this.pickupCooldown - dt);
 
-    if (!this.held && this.pickupCooldown <= 0 && this.getDistanceToPlayer(player) <= this.tuning.pickupRange) {
+    if (!this.held && this.pickupCooldown <= 0 && this.getDistanceToPlayer(player) <= PICKUP_RANGE) {
       this.held = true;
       // Held balls keep a body for positioning, but move to a non-colliding layer so they do not block the player.
       rigidBody.setObjectLayer(world, this.body, this.heldLayer);
@@ -100,13 +79,13 @@ export class BallController {
       player.getForward(this.playerForward);
       this.target
         .copy(this.playerPosition)
-        .addScaledVector(this.playerForward, this.tuning.holdDistance)
-        .add(new THREE.Vector3(0, this.tuning.holdHeight, 0));
+        .addScaledVector(this.playerForward, HOLD_DISTANCE)
+        .add(new THREE.Vector3(0, HOLD_HEIGHT, 0));
 
       const position = this.body.position;
-      ballVelocity[0] = (this.target.x - position[0]) * this.tuning.holdFollowStrength;
-      ballVelocity[1] = (this.target.y - position[1]) * this.tuning.holdFollowStrength;
-      ballVelocity[2] = (this.target.z - position[2]) * this.tuning.holdFollowStrength;
+      ballVelocity[0] = (this.target.x - position[0]) * HOLD_FOLLOW_STRENGTH;
+      ballVelocity[1] = (this.target.y - position[1]) * HOLD_FOLLOW_STRENGTH;
+      ballVelocity[2] = (this.target.z - position[2]) * HOLD_FOLLOW_STRENGTH;
       rigidBody.setLinearVelocity(world, this.body, ballVelocity);
       rigidBody.setAngularVelocity(world, this.body, zeroAngular);
     }
@@ -157,14 +136,14 @@ export class BallController {
 
     const clampedPower = THREE.MathUtils.clamp(power, 0, 1);
     // Charge maps into a floor-to-max range so quick releases still feel intentional.
-    const throwPower = THREE.MathUtils.lerp(this.tuning.throwMinPower, 1, clampedPower);
+    const throwPower = THREE.MathUtils.lerp(THROW_MIN_POWER, 1, clampedPower);
     player.getVelocity(this.playerVelocity);
-    out[0] = this.playerVelocity.x + launchDirection.x * this.tuning.throwStrength * throwPower;
+    out[0] = this.playerVelocity.x + launchDirection.x * THROW_STRENGTH * throwPower;
     out[1] =
       this.playerVelocity.y * 0.25 +
-      launchDirection.y * this.tuning.throwStrength * throwPower +
-      this.tuning.throwUpward * throwPower;
-    out[2] = this.playerVelocity.z + launchDirection.z * this.tuning.throwStrength * throwPower;
+      launchDirection.y * THROW_STRENGTH * throwPower +
+      THROW_UPWARD * throwPower;
+    out[2] = this.playerVelocity.z + launchDirection.z * THROW_STRENGTH * throwPower;
     return out;
   }
 
@@ -175,13 +154,6 @@ export class BallController {
     rigidBody.setPosition(world, this.body, spawnPosition, false);
     rigidBody.setLinearVelocity(world, this.body, [0, 0, 0]);
     rigidBody.setAngularVelocity(world, this.body, [0, 0, 0]);
-  }
-
-  getTelemetry(player: PlayerController): BallTelemetry {
-    return {
-      held: this.held,
-      distance: this.getDistanceToPlayer(player),
-    };
   }
 
   isHeld() {

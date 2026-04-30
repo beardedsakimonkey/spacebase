@@ -83,7 +83,6 @@ function configurePhysicsDebugObject(object: THREE.Object3D) {
   let lastTime = performance.now();
   let accumulator = 0;
   let elapsed = 0;
-  let lastPhysicsMs = 0;
   let pendingDash = false;
 
   function animationFrame(now: number) {
@@ -112,9 +111,7 @@ function configurePhysicsDebugObject(object: THREE.Object3D) {
         pendingDash = false;
       }
 
-      const physicsStart = performance.now();
       updateWorld(physics.world, arena.listener, PHYSICS_DT);
-      lastPhysicsMs = performance.now() - physicsStart;
 
       syncPhysicsEntities(arena.entities);
       player.syncVisual();
@@ -131,7 +128,6 @@ function configurePhysicsDebugObject(object: THREE.Object3D) {
     }
 
     gui.update({
-      physicsMs: lastPhysicsMs,
       player: player.getTelemetry(),
     });
 

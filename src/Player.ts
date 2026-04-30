@@ -61,18 +61,18 @@ const PLAYER_SPAWN_POSITION: Vec3 = [0, 3.5, 0];
 const CAPSULE_RADIUS = 0.58;
 const CAPSULE_HALF_HEIGHT = 0.51;
 const PLAYER_ALLOWED_DEGREES_OF_FREEDOM = dof(true, true, true, false, false, false);
-const MAX_RUN_SPEED = 7;
-const ACCELERATION_TIME = 7.5;
-const TURN_SPEED = 9;
-const AIR_CONTROL_FACTOR = 0.22;
+const MAX_RUN_SPEED = 8;
+const ACCELERATION_TIME = 8.5;
+const TURN_SPEED = 10; // does not affect physics (besides dash direction)
+const AIR_CONTROL_FACTOR = 0.3;
 const DRAG_DAMPING = 0.18;
 const MOVE_IMPULSE_POINT_Y = 0.51;
-const PLAYER_FRICTION = 0.35;
+const PLAYER_FRICTION = 0.15;
 const MAX_SLOPE_ANGLE = 0.95;
 const MIN_GROUND_NORMAL_Y = 0.01;
-const JUMP_VELOCITY = 6.8;
+const JUMP_VELOCITY = 10.;
 const NORMAL_GRAVITY_SCALE = 1;
-const FALLING_GRAVITY_SCALE = 1;
+const FALLING_GRAVITY_SCALE = 2;
 const MAX_FALL_SPEED = 22;
 const JUMP_GROUND_IGNORE_TIME = 0.14;
 const GROUNDED_SNAP_SPEED = 18;
@@ -208,6 +208,7 @@ export class PlayerController {
       this.dashDirection[1] = 0;
       this.dashDirection[2] = forward.z;
     }
+    this.facingYaw = Math.atan2(this.dashDirection[0], this.dashDirection[2]);
     this.dashTimer = DASH_DURATION;
     this.dashCooldownTimer = DASH_COOLDOWN;
     if (!this.hasGroundContact) {
@@ -264,6 +265,10 @@ export class PlayerController {
   }
 
   private updateFacingYaw(dt: number) {
+    if (this.dashTimer > 0) {
+      return;
+    }
+
     if (this.hasMoveInput()) {
       const targetYaw = Math.atan2(this.input.moveDirection[0], this.input.moveDirection[2]);
       const deltaYaw = normalizeAngle(targetYaw - this.facingYaw);

@@ -33,7 +33,7 @@ export function createPhysicsContext(): PhysicsContext {
   registerAll();
 
   const settings = createWorldSettings();
-  settings.gravity = [0, -9.81, 0];
+  settings.gravity = [0, -10.81, 0];
 
   const broadphaseStatic = addBroadphaseLayer(settings);
   const broadphaseMoving = addBroadphaseLayer(settings);

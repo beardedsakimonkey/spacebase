@@ -65,20 +65,19 @@ const MAX_RUN_SPEED = 7;
 const ACCELERATION_TIME = 7.5;
 const TURN_SPEED = 9;
 const AIR_CONTROL_FACTOR = 0.22;
-const DRAG_DAMPING_C = 0.18;
+const DRAG_DAMPING = 0.18;
 const MOVE_IMPULSE_POINT_Y = 0.51;
 const PLAYER_FRICTION = 0.35;
 const MAX_SLOPE_ANGLE = 0.95;
 const JUMP_VELOCITY = 6.8;
-const NORMAL_GRAVITY_SCALE = 0.85;
-const FALLING_GRAVITY_SCALE = 2;
+const NORMAL_GRAVITY_SCALE = 1;
+const FALLING_GRAVITY_SCALE = 1;
 const MAX_FALL_SPEED = 22;
 const JUMP_GROUND_IGNORE_TIME = 0.14;
 const GROUNDED_SNAP_SPEED = 18;
 const GROUND_CONTACT_TOLERANCE = 0.04;
 const RAY_HIT_FORGIVENESS = 0.04;
 const DASH_IMPULSE = 30;
-const DASH_UPWARD_IMPULSE = 1.9;
 const DASH_DURATION = 0.44;
 const DASH_COOLDOWN = 0.7;
 
@@ -149,7 +148,6 @@ export class PlayerController {
     this.jumpGroundIgnoreTimer = Math.max(0, this.jumpGroundIgnoreTimer - dt);
     this.input.wantToJump = input.jump;
     vec3.set(this.input.moveDirection, cameraMoveDirection.x, 0, cameraMoveDirection.z);
-    this.body.friction = PLAYER_FRICTION;
 
     this.updateFacingYaw(dt);
     this.updateGround(world);
@@ -213,7 +211,7 @@ export class PlayerController {
       this.airDashUsed = true;
     }
     this.animator.startDash();
-    this.applyDashVelocity(world, true);
+    this.applyDashVelocity(world);
     return true;
   }
 
@@ -355,7 +353,7 @@ export class PlayerController {
     const acceleration = 1 / Math.max(MIN_SAFE_DURATION, ACCELERATION_TIME);
     const controlStrength = hasMoveInput
       ? acceleration * (this.canGroundJump ? 1 : AIR_CONTROL_FACTOR)
-      : DRAG_DAMPING_C;
+      : DRAG_DAMPING;
 
     horizontalImpulse[0] = deltaVelocity[0] * controlStrength;
     horizontalImpulse[1] = 0;
@@ -375,14 +373,14 @@ export class PlayerController {
     rigidBody.addImpulseAtPosition(world, this.body, horizontalImpulse, impulsePoint);
   }
 
-  private applyDashVelocity(world: World, includeUpwardImpulse = false) {
+  private applyDashVelocity(world: World) {
     const velocity = this.body.motionProperties.linearVelocity;
     const dashDuration = Math.max(MIN_SAFE_DURATION, DASH_DURATION);
     const dashSpeed = DASH_IMPULSE * Math.max(0, Math.min(1, this.dashTimer / dashDuration));
 
     // Dash input is locked, so speed decays across the committed dash instead of being re-applied flat.
     dashVelocity[0] = this.dashDirection[0] * dashSpeed;
-    dashVelocity[1] = includeUpwardImpulse ? velocity[1] + DASH_UPWARD_IMPULSE : velocity[1];
+    dashVelocity[1] = velocity[1];
     dashVelocity[2] = this.dashDirection[2] * dashSpeed;
     rigidBody.setLinearVelocity(world, this.body, dashVelocity);
   }

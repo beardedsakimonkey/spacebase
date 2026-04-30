@@ -74,7 +74,6 @@ const NORMAL_GRAVITY_SCALE = 0.85;
 const FALLING_GRAVITY_SCALE = 2;
 const MAX_FALL_SPEED = 22;
 const JUMP_GROUND_IGNORE_TIME = 0.14;
-const LANDING_DAMPING = 0.2;
 const GROUNDED_SNAP_SPEED = 18;
 const GROUND_CONTACT_TOLERANCE = 0.04;
 const RAY_HIT_FORGIVENESS = 0.04;
@@ -94,7 +93,6 @@ export class PlayerController {
     wantToJump: false,
   };
 
-  // Stable authored facing, decoupled from the dynamic body's noisy collision rotation.
   private facingYaw = 0;
   private hasGroundContact = false;
   private canGroundJump = false;
@@ -155,7 +153,6 @@ export class PlayerController {
 
     this.updateFacingYaw(dt);
     this.updateGround(world);
-    this.applyLandingDamping(world);
 
     // Dash is an explicit velocity override; otherwise use the softer horizontal motor.
     if (this.dashTimer > 0) {
@@ -386,18 +383,6 @@ export class PlayerController {
     dashVelocity[1] = includeUpwardImpulse ? velocity[1] + DASH_UPWARD_IMPULSE : velocity[1];
     dashVelocity[2] = this.dashDirection[2] * dashSpeed;
     rigidBody.setLinearVelocity(world, this.body, dashVelocity);
-  }
-
-  private applyLandingDamping(world: World) {
-    const velocity = this.body.motionProperties.linearVelocity;
-    if (!this.hadGroundContact && this.hasGroundContact && velocity[1] < 0) {
-      // Landing should settle into contact instead of rebounding from downward velocity.
-      rigidBody.setLinearVelocity(world, this.body, [
-        velocity[0],
-        velocity[1] * LANDING_DAMPING,
-        velocity[2],
-      ]);
-    }
   }
 
   private applyGroundContactCorrection(world: World) {

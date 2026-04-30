@@ -26,7 +26,8 @@ export class Gui {
       physicsWireframes: false,
     };
 
-    this.configureStatsPanel();
+    this.configureGuiPanel();
+    this.createStatsPanel();
     this.createReadouts();
     this.createDebugOptions();
   }
@@ -52,11 +53,35 @@ export class Gui {
     }
   }
 
-  private configureStatsPanel() {
+  private configureGuiPanel() {
+    const panel = this.gui.domElement;
+    panel.style.top = "8px";
+    panel.style.left = "8px";
+    panel.style.right = "auto";
+    panel.style.zIndex = "20";
+  }
+
+  private createStatsPanel() {
     this.stats.showPanel(0);
-    this.stats.dom.style.top = "14px";
-    this.stats.dom.style.left = "14px";
+    this.stats.dom.style.position = "fixed";
+    this.stats.dom.style.top = "8px";
+    this.stats.dom.style.left = "unset";
+    this.stats.dom.style.right = "4px";
+    this.stats.dom.style.width = "auto";
+    this.stats.dom.style.display = "flex";
+    this.stats.dom.style.gap = "4px";
     this.stats.dom.style.zIndex = "20";
+    this.stats.dom.style.cursor = "default";
+    this.stats.dom.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }, true);
+    // show fps & ms elements
+    Array.from(this.stats.dom.children).forEach((child, index) => {
+      if (child instanceof HTMLElement) {
+        child.style.display = index < 2 ? "block" : "none";
+      }
+    });
     document.body.append(this.stats.dom);
   }
 

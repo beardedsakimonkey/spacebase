@@ -21,16 +21,26 @@ export type PlayerAnimationFrameState = {
   horizontalSpeed: number;
 };
 
+type AnimationTuning = {
+  startTime?: number;
+  timeScale?: number;
+};
+
+const ANIMATION_TUNING: Partial<Record<PlayerAnimationName, AnimationTuning>> = {
+  jumpStart: { startTime: 0.18, timeScale: 2 },
+  shortJump: { startTime: 0.3 },
+  jumpLand: { timeScale: 2 },
+  wallHit: { startTime: 0.18 },
+  dash: { startTime: 0.1 },
+};
+
 const RUN_ANIMATION_BASE_SPEED = 8.2;
 const ANIMATION_FADE_SECONDS = 0.12;
 const JUMP_START_ANIMATION_SECONDS = 0.28;
-const JUMP_START_ANIMATION_START_TIME = 0.18;
 const SHORT_JUMP_ANIMATION_SECONDS = 0.42;
-const SHORT_JUMP_ANIMATION_START_TIME = 0.3;
 const LAND_ANIMATION_SECONDS = 0.24;
 const DASH_ANIMATION_SECONDS = 0.40;
 const WALL_HIT_ANIMATION_SECONDS = 0.5;
-const WALL_HIT_ANIMATION_START_TIME = 0.18;
 const SPAWN_ANIMATION_SECONDS = 1.3;
 const PLAYER_MODEL_SCALE = 1.0;
 const PLAYER_MODEL_OFFSET_Y = -1.1;
@@ -131,12 +141,8 @@ export class PlayerAnimator {
 
     const desired = this.advanceAndSelectAnimation(state.wantsRunAnimation, state.hasGroundContact, dt);
     const action = this.animationActions.get(desired);
-    if (action && desired === "run") {
-      action.timeScale = THREE.MathUtils.clamp(state.horizontalSpeed / RUN_ANIMATION_BASE_SPEED, 0.8, 1.65);
-    } else if (action && (desired === "jumpStart" || desired === "jumpLand")) {
-      action.timeScale = 2;
-    } else if (action) {
-      action.timeScale = 1;
+    if (action) {
+      action.timeScale = this.getAnimationTimeScale(desired, state.horizontalSpeed);
     }
 
     this.playAnimation(desired);
@@ -248,6 +254,14 @@ export class PlayerAnimator {
       || this.spawnAnimationTimer > 0;
   }
 
+  private getAnimationTimeScale(name: PlayerAnimationName, horizontalSpeed: number) {
+    if (name === "run") {
+      return THREE.MathUtils.clamp(horizontalSpeed / RUN_ANIMATION_BASE_SPEED, 0.8, 1.65);
+    }
+
+    return ANIMATION_TUNING[name]?.timeScale ?? 1;
+  }
+
   private playAnimation(name: PlayerAnimationName, fadeSeconds = ANIMATION_FADE_SECONDS) {
     const next = this.animationActions.get(name);
     if (!next || this.activeAnimation === name) {
@@ -257,13 +271,7 @@ export class PlayerAnimator {
     const previous = this.activeAnimation ? this.animationActions.get(this.activeAnimation) : undefined;
     next.enabled = true;
     next.reset();
-    if (name === "jumpStart") {
-      next.time = JUMP_START_ANIMATION_START_TIME;
-    } else if (name === "shortJump") {
-      next.time = SHORT_JUMP_ANIMATION_START_TIME;
-    } else if (name === "wallHit") {
-      next.time = WALL_HIT_ANIMATION_START_TIME;
-    }
+    next.time = ANIMATION_TUNING[name]?.startTime ?? 0;
     next.setEffectiveWeight(1);
     next.fadeIn(fadeSeconds).play();
     previous?.fadeOut(fadeSeconds);

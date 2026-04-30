@@ -9,6 +9,7 @@ type PlayerAnimationName =
   | "jumpStart"
   | "jumpIdle"
   | "jumpLand"
+  | "shortJump"
   | "dash"
   | "wallHit"
   | "spawn";
@@ -24,6 +25,8 @@ const RUN_ANIMATION_BASE_SPEED = 8.2;
 const ANIMATION_FADE_SECONDS = 0.12;
 const JUMP_START_ANIMATION_SECONDS = 0.28;
 const JUMP_START_ANIMATION_START_TIME = 0.18;
+const SHORT_JUMP_ANIMATION_SECONDS = 0.42;
+const SHORT_JUMP_ANIMATION_START_TIME = 0.3;
 const LAND_ANIMATION_SECONDS = 0.24;
 const DASH_ANIMATION_SECONDS = 0.40;
 const WALL_HIT_ANIMATION_SECONDS = 0.5;
@@ -38,6 +41,7 @@ export class PlayerAnimator {
   private animationMixer: THREE.AnimationMixer | null = null;
   private activeAnimation: PlayerAnimationName | null = null;
   private jumpStartAnimationTimer = 0;
+  private shortJumpAnimationTimer = 0;
   private landAnimationTimer = 0;
   private dashAnimationTimer = 0;
   private wallHitAnimationTimer = 0;
@@ -81,6 +85,7 @@ export class PlayerAnimator {
     this.bindAnimation("spawn", model, generalClips, "Spawn_Ground", true);
     this.bindAnimation("run", model, movementClips, "Running_B");
     this.bindAnimation("jumpStart", model, movementClips, "Jump_Start", true);
+    this.bindAnimation("shortJump", model, movementClips, "Jump_Full_Short", true);
     this.bindAnimation("jumpIdle", model, movementClips, "Jump_Idle");
     this.bindAnimation("jumpLand", model, movementClips, "Jump_Land", true);
     this.bindAnimation("dash", model, movementAdvancedClips, "Dodge_Forward", true);
@@ -119,6 +124,9 @@ export class PlayerAnimator {
 
     if (!state.hadGroundContact && state.hasGroundContact) {
       this.landAnimationTimer = LAND_ANIMATION_SECONDS;
+      this.shortJumpAnimationTimer = 0;
+    } else if (state.hadGroundContact && !state.hasGroundContact && !this.hasActiveOneShotTimer()) {
+      this.shortJumpAnimationTimer = SHORT_JUMP_ANIMATION_SECONDS;
     }
 
     const desired = this.advanceAndSelectAnimation(state.wantsRunAnimation, state.hasGroundContact, dt);
@@ -179,6 +187,7 @@ export class PlayerAnimator {
 
   private clearAllTimers() {
     this.jumpStartAnimationTimer = 0;
+    this.shortJumpAnimationTimer = 0;
     this.landAnimationTimer = 0;
     this.dashAnimationTimer = 0;
     this.wallHitAnimationTimer = 0;
@@ -216,6 +225,11 @@ export class PlayerAnimator {
     }
 
     if (!hasGroundContact) {
+      if (this.shortJumpAnimationTimer > 0) {
+        this.shortJumpAnimationTimer = Math.max(0, this.shortJumpAnimationTimer - dt);
+        return "shortJump";
+      }
+
       return "jumpIdle";
     }
 
@@ -224,6 +238,14 @@ export class PlayerAnimator {
     }
 
     return "idle";
+  }
+
+  private hasActiveOneShotTimer() {
+    return this.jumpStartAnimationTimer > 0
+      || this.landAnimationTimer > 0
+      || this.dashAnimationTimer > 0
+      || this.wallHitAnimationTimer > 0
+      || this.spawnAnimationTimer > 0;
   }
 
   private playAnimation(name: PlayerAnimationName, fadeSeconds = ANIMATION_FADE_SECONDS) {
@@ -237,6 +259,8 @@ export class PlayerAnimator {
     next.reset();
     if (name === "jumpStart") {
       next.time = JUMP_START_ANIMATION_START_TIME;
+    } else if (name === "shortJump") {
+      next.time = SHORT_JUMP_ANIMATION_START_TIME;
     } else if (name === "wallHit") {
       next.time = WALL_HIT_ANIMATION_START_TIME;
     }

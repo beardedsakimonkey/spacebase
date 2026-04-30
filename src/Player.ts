@@ -69,6 +69,7 @@ const DRAG_DAMPING = 0.18;
 const MOVE_IMPULSE_POINT_Y = 0.51;
 const PLAYER_FRICTION = 0.35;
 const MAX_SLOPE_ANGLE = 0.95;
+const MIN_GROUND_NORMAL_Y = 0.01;
 const JUMP_VELOCITY = 6.8;
 const NORMAL_GRAVITY_SCALE = 1;
 const FALLING_GRAVITY_SCALE = 1;
@@ -98,6 +99,7 @@ export class PlayerController {
   private hadGroundContact = false;
   private readonly groundSurfaceVelocity: Vec3 = vec3.create();
   private groundDistance = 0;
+  private groundRestDistance = CAPSULE_RADIUS;
   private dashTimer = 0;
   private dashCooldownTimer = 0;
   private readonly dashDirection: Vec3 = vec3.fromValues(0, 0, 1);
@@ -186,6 +188,7 @@ export class PlayerController {
     this.hadGroundContact = false;
     vec3.set(this.groundSurfaceVelocity, 0, 0, 0);
     this.groundDistance = 0;
+    this.groundRestDistance = CAPSULE_RADIUS;
     this.animator.reset();
   }
 
@@ -275,6 +278,7 @@ export class PlayerController {
     vec3.set(groundSlopeNormal, 0, 1, 0);
     this.canGroundJump = false;
     vec3.set(this.groundSurfaceVelocity, 0, 0, 0);
+    this.groundRestDistance = CAPSULE_RADIUS;
 
     if (this.jumpGroundIgnoreTimer > 0) {
       // Fresh jumps ignore nearby ground so grounded snap cannot pull the player back down.
@@ -284,9 +288,7 @@ export class PlayerController {
     }
 
     const position = this.body.position;
-    rayOrigin[0] = position[0];
-    rayOrigin[1] = position[1] - CAPSULE_HALF_HEIGHT;
-    rayOrigin[2] = position[2];
+    vec3.set(rayOrigin, position[0], position[1] - CAPSULE_HALF_HEIGHT, position[2]);
 
     const rayLength = CAPSULE_RADIUS + 2;
 
@@ -297,7 +299,36 @@ export class PlayerController {
       ? rayCollector.hit.fraction * rayLength
       : Infinity;
 
-    if (hitDistance >= CAPSULE_RADIUS + RAY_HIT_FORGIVENESS) {
+    if (hitDistance === Infinity) {
+      this.hasGroundContact = false;
+      this.groundDistance = 0;
+      return;
+    }
+
+    vec3.set(groundHitPosition, rayOrigin[0], rayOrigin[1] - hitDistance, rayOrigin[2]);
+    const groundBodyId = rayCollector.hit.bodyIdB;
+    const groundSubShapeId = rayCollector.hit.subShapeId;
+
+    // Ground state comes only from center contact; forward probes made ledges feel sticky.
+    const groundBody = rigidBody.get(world, groundBodyId);
+    if (!groundBody) {
+      this.hasGroundContact = false;
+      this.groundDistance = 0;
+      return;
+    }
+
+    rigidBody.getSurfaceNormal(groundSlopeNormal, groundBody, groundHitPosition, groundSubShapeId);
+    const groundNormalY = THREE.MathUtils.clamp(vec3.dot(groundSlopeNormal, worldUp), -1, 1);
+    const slopeAngle = Math.acos(groundNormalY);
+    const canStandOnSurface = slopeAngle < MAX_SLOPE_ANGLE;
+    // A vertical ray from the capsule's lower sphere center hits slopes farther away than flat
+    // ground. Scale the expected rest distance by the slope normal so ramps still count as ground.
+    const restDistance = canStandOnSurface
+      ? CAPSULE_RADIUS / Math.max(groundNormalY, MIN_GROUND_NORMAL_Y)
+      : CAPSULE_RADIUS;
+
+    // Ignore surfaces that are below the capsule's expected resting distance for this slope.
+    if (hitDistance >= restDistance + RAY_HIT_FORGIVENESS) {
       this.hasGroundContact = false;
       this.groundDistance = 0;
       return;
@@ -305,26 +336,16 @@ export class PlayerController {
 
     this.hasGroundContact = true;
     this.groundDistance = hitDistance;
-    vec3.set(groundHitPosition, rayOrigin[0], rayOrigin[1] - hitDistance, rayOrigin[2]);
-    const groundBodyId = rayCollector.hit.bodyIdB;
-    const groundSubShapeId = rayCollector.hit.subShapeId;
+    this.groundRestDistance = restDistance;
 
-    // Ground state comes only from center contact; forward probes made ledges feel sticky.
-    const groundBody = rigidBody.get(world, groundBodyId);
-    if (groundBody) {
-      const conveyorVelocity = getConveyorVelocity(groundBody);
-      if (conveyorVelocity) {
-        vec3.set(this.groundSurfaceVelocity, conveyorVelocity[0], conveyorVelocity[1], conveyorVelocity[2]);
-      }
-      rigidBody.getSurfaceNormal(groundSlopeNormal, groundBody, groundHitPosition, groundSubShapeId);
-      const slopeAngle = Math.acos(
-        THREE.MathUtils.clamp(vec3.dot(groundSlopeNormal, worldUp), -1, 1),
-      );
-      this.canGroundJump = slopeAngle < MAX_SLOPE_ANGLE;
-      if (this.canGroundJump) {
-        this.canAirJump = true;
-        this.airDashUsed = false;
-      }
+    const conveyorVelocity = getConveyorVelocity(groundBody);
+    if (conveyorVelocity) {
+      vec3.set(this.groundSurfaceVelocity, conveyorVelocity[0], conveyorVelocity[1], conveyorVelocity[2]);
+    }
+    this.canGroundJump = canStandOnSurface;
+    if (this.canGroundJump) {
+      this.canAirJump = true;
+      this.airDashUsed = false;
     }
   }
 
@@ -392,7 +413,7 @@ export class PlayerController {
 
     // Ground snap is vertical-only; horizontal control is handled by applyHorizontalControl().
     const velocity = this.body.motionProperties.linearVelocity;
-    const contactError = CAPSULE_RADIUS - this.groundDistance;
+    const contactError = this.groundRestDistance - this.groundDistance;
     if (contactError <= GROUND_CONTACT_TOLERANCE) {
       return;
     }

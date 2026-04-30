@@ -7,8 +7,8 @@ import {
   MotorState,
   rigidBody,
   staticCompound,
-  type CompoundShapeChild,
   type Listener,
+  type StaticCompoundShapeSettings,
   type World,
 } from "crashcat";
 import type { Quat, Vec3 } from "mathcat";
@@ -328,7 +328,7 @@ async function loadModel(path: string) {
 // Groups repeated static tile colliders into one BVH-backed body per material,
 // reducing rigid-body count while keeping each box as an individual collision child.
 class StaticBoxBatch {
-  private readonly children: CompoundShapeChild[] = [];
+  private readonly children: StaticCompoundShapeSettings["children"] = [];
   private readonly boxShapes = new Map<string, ReturnType<typeof box.create>>();
   private flushed = false;
 

@@ -35,14 +35,14 @@ type BaseScatteredPropPlacement = ModelTransform & {
 
 type BoxScatteredPropPlacement = BaseScatteredPropPlacement & {
   halfExtents: Vec3;
-  offset?: Vec3;
+  offsetCoM?: Vec3;
   radius?: never;
 };
 
 type SphereScatteredPropPlacement = BaseScatteredPropPlacement & {
   radius: number;
   halfExtents?: never;
-  offset?: never;
+  offsetCoM?: never;
 };
 
 export type ScatteredPropPlacement = BoxScatteredPropPlacement | SphereScatteredPropPlacement;
@@ -59,7 +59,7 @@ const CONE: Omit<BoxScatteredPropPlacement, "x" | "y" | "z" | "ry"> = {
   friction: 0.9,
   restitution: 0.18,
   mass: 0.25,
-  offset: [0, -0.22, 0],
+  offsetCoM: [0, -0.22, 0],
   linearDamping: 0.08,
   angularDamping: 0.18,
 };
@@ -110,6 +110,7 @@ export const SCATTERED_PROPS: ScatteredPropPlacement[] = [
     friction: 0.85,
     restitution: 0.12,
     mass: 0.65,
+    offsetCoM: [0, -0.38, 0],
     linearDamping: 0.08,
     angularDamping: 0.18,
   },
@@ -288,8 +289,8 @@ function createDynamicShape(placement: ScatteredPropPlacement) {
   }
 
   const baseShape = box.create({ halfExtents: placement.halfExtents, convexRadius: 0.03 });
-  return placement.offset
-    ? offsetCenterOfMass.create({ shape: baseShape, offset: placement.offset })
+  return placement.offsetCoM
+    ? offsetCenterOfMass.create({ shape: baseShape, offset: placement.offsetCoM })
     : baseShape;
 }
 

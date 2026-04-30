@@ -1,6 +1,6 @@
 import * as THREE from "three";
 
-type PlayerAnimationName = "idle" | "run" | "jumpStart" | "jumpIdle" | "jumpLand" | "throw" | "dash";
+type PlayerAnimationName = "idle" | "run" | "jumpStart" | "jumpIdle" | "jumpLand" | "dash";
 
 export type PlayerAnimationFrameState = {
   wasOnGround: boolean;
@@ -13,7 +13,6 @@ const RUN_ANIMATION_BASE_SPEED = 8.2;
 const ANIMATION_FADE_SECONDS = 0.12;
 const JUMP_START_ANIMATION_SECONDS = 0.28;
 const LAND_ANIMATION_SECONDS = 0.24;
-const THROW_ANIMATION_SECONDS = 1.37 / 2;
 const DASH_ANIMATION_SECONDS = 0.40;
 
 export class PlayerAnimator {
@@ -22,7 +21,6 @@ export class PlayerAnimator {
   private activeAnimation: PlayerAnimationName | null = null;
   private jumpStartAnimationTimer = 0;
   private landAnimationTimer = 0;
-  private throwAnimationTimer = 0;
   private dashAnimationTimer = 0;
 
   attach(
@@ -39,7 +37,6 @@ export class PlayerAnimator {
     this.bindAnimation("jumpStart", model, movementClips, "Jump_Start", true);
     this.bindAnimation("jumpIdle", model, movementClips, "Jump_Idle");
     this.bindAnimation("jumpLand", model, movementClips, "Jump_Land", true);
-    this.bindAnimation("throw", model, generalClips, "Throw", true);
     this.bindAnimation("dash", model, movementAdvancedClips, "Dodge_Forward", true);
     this.playAnimation("idle", 0);
   }
@@ -47,21 +44,12 @@ export class PlayerAnimator {
   reset() {
     this.jumpStartAnimationTimer = 0;
     this.landAnimationTimer = 0;
-    this.throwAnimationTimer = 0;
     this.dashAnimationTimer = 0;
     this.playAnimation("idle", 0.05);
   }
 
-  startThrow() {
-    this.throwAnimationTimer = THROW_ANIMATION_SECONDS;
-    this.dashAnimationTimer = 0;
-    this.jumpStartAnimationTimer = 0;
-    this.landAnimationTimer = 0;
-  }
-
   startDash() {
     this.dashAnimationTimer = DASH_ANIMATION_SECONDS;
-    this.throwAnimationTimer = 0;
     this.jumpStartAnimationTimer = 0;
     this.landAnimationTimer = 0;
   }
@@ -69,10 +57,6 @@ export class PlayerAnimator {
   startJump() {
     this.jumpStartAnimationTimer = JUMP_START_ANIMATION_SECONDS;
     this.landAnimationTimer = 0;
-  }
-
-  isThrowing() {
-    return this.throwAnimationTimer > 0;
   }
 
   update(dt: number, state: PlayerAnimationFrameState) {
@@ -88,7 +72,7 @@ export class PlayerAnimator {
     const action = this.animationActions.get(desired);
     if (action && desired === "run") {
       action.timeScale = THREE.MathUtils.clamp(state.horizontalSpeed / RUN_ANIMATION_BASE_SPEED, 0.8, 1.65);
-    } else if (action && (desired === "throw" || desired === "jumpStart" || desired === "jumpLand")) {
+    } else if (action && (desired === "jumpStart" || desired === "jumpLand")) {
       action.timeScale = 2;
     } else if (action) {
       action.timeScale = 1;
@@ -145,11 +129,6 @@ export class PlayerAnimator {
     isOnGround: boolean,
     dt: number,
   ): PlayerAnimationName {
-    if (this.throwAnimationTimer > 0) {
-      this.throwAnimationTimer = Math.max(0, this.throwAnimationTimer - dt);
-      return "throw";
-    }
-
     if (this.dashAnimationTimer > 0) {
       this.dashAnimationTimer = Math.max(0, this.dashAnimationTimer - dt);
       return "dash";

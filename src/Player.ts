@@ -38,8 +38,6 @@ const PLAYER_MODEL_SCALE = 1.0;
 const PLAYER_MODEL_OFFSET_Y = -1.1;
 const PLAYER_BODY_COLOR: MannequinBodyColor = "yellow";
 const MOVE_INPUT_EPSILON = 0.001;
-const TURN_TARGET_EPSILON = 0.08;
-const REVERSAL_TURN_THRESHOLD = Math.PI * 0.82;
 const MIN_SAFE_DURATION = 0.001;
 const MAX_GROUND_CORRECTION_SPEED = 2;
 const RESPAWN_Y = -14;
@@ -113,9 +111,6 @@ export class PlayerController {
 
   // Stable authored facing, decoupled from the dynamic body's noisy collision rotation.
   private facingYaw = 0;
-  private reversalTurnTargetYaw: number | null = null;
-  private reversalTurnSign = 0;
-  private lastTurnSign = 1;
   private isOnGround = false;
   private canJump = false;
   private wasOnGround = false;
@@ -167,7 +162,6 @@ export class PlayerController {
     world: World,
     input: MovementInput,
     cameraMoveDirection: THREE.Vector3,
-    cameraPosition: THREE.Vector3,
     dt: number,
   ) {
     this.wasOnGround = this.isOnGround;
@@ -178,7 +172,7 @@ export class PlayerController {
     vec3.set(this.input.moveDirection, cameraMoveDirection.x, 0, cameraMoveDirection.z);
     this.body.friction = PLAYER_FRICTION;
 
-    this.updateFacingYaw(dt, cameraPosition);
+    this.updateFacingYaw(dt);
     this.updateGround(world);
     this.applyLandingDamping(world);
 
@@ -207,9 +201,6 @@ export class PlayerController {
     rigidBody.setAngularVelocity(world, this.body, [0, 0, 0]);
     this.body.quaternion = [0, 0, 0, 1];
     this.facingYaw = 0;
-    this.reversalTurnTargetYaw = null;
-    this.reversalTurnSign = 0;
-    this.lastTurnSign = 1;
     this.dashTimer = 0;
     this.dashCooldownTimer = 0;
     this.jumpGroundIgnoreTimer = 0;
@@ -227,15 +218,6 @@ export class PlayerController {
     vec3.set(this.groundSurfaceVelocity, 0, 0, 0);
     this.groundDistance = 0;
     this.animator.reset();
-  }
-
-  startThrowAnimation(direction: THREE.Vector3) {
-    const hx = direction.x;
-    const hz = direction.z;
-    if (Math.hypot(hx, hz) > MOVE_INPUT_EPSILON) {
-      this.facingYaw = Math.atan2(hx, hz);
-    }
-    this.animator.startThrow();
   }
 
   dash(world: World) {
@@ -338,50 +320,12 @@ export class PlayerController {
     });
   }
 
-  private updateFacingYaw(dt: number, cameraPosition: THREE.Vector3) {
-    if (this.animator.isThrowing()) {
-      return;
-    }
+  private updateFacingYaw(dt: number) {
     if (this.hasMoveInput()) {
       const targetYaw = Math.atan2(this.input.moveDirection[0], this.input.moveDirection[2]);
-      let deltaYaw = normalizeAngle(targetYaw - this.facingYaw);
-      const targetChanged =
-        this.reversalTurnTargetYaw !== null &&
-        Math.abs(normalizeAngle(targetYaw - this.reversalTurnTargetYaw)) > TURN_TARGET_EPSILON;
-
-      if (targetChanged) {
-        this.reversalTurnTargetYaw = null;
-        this.reversalTurnSign = 0;
-      }
-
-      if (Math.abs(deltaYaw) > REVERSAL_TURN_THRESHOLD) {
-        if (this.reversalTurnSign === 0) {
-          // Lock reversal direction once; recalculating this every frame can flip signs and jitter.
-          const position = this.body.position;
-          const cameraSideX = cameraPosition.x - position[0];
-          const cameraSideZ = cameraPosition.z - position[2];
-          const positiveTurnMidYaw = this.facingYaw + Math.PI / 2;
-          const positiveTurnMidX = Math.sin(positiveTurnMidYaw);
-          const positiveTurnMidZ = Math.cos(positiveTurnMidYaw);
-          const cameraDot = positiveTurnMidX * cameraSideX + positiveTurnMidZ * cameraSideZ;
-          this.reversalTurnTargetYaw = targetYaw;
-          this.reversalTurnSign = Math.abs(cameraDot) > MOVE_INPUT_EPSILON ? Math.sign(cameraDot) : this.lastTurnSign;
-        }
-
-        deltaYaw = Math.abs(deltaYaw) * this.reversalTurnSign;
-      } else if (Math.abs(deltaYaw) < TURN_TARGET_EPSILON) {
-        this.reversalTurnTargetYaw = null;
-        this.reversalTurnSign = 0;
-      }
-
+      const deltaYaw = normalizeAngle(targetYaw - this.facingYaw);
       const step = Math.max(-TURN_SPEED * dt, Math.min(TURN_SPEED * dt, deltaYaw));
       this.facingYaw += step;
-      if (Math.abs(step) > 0.0001) {
-        this.lastTurnSign = Math.sign(step);
-      }
-    } else {
-      this.reversalTurnTargetYaw = null;
-      this.reversalTurnSign = 0;
     }
   }
 

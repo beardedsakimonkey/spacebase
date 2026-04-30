@@ -75,7 +75,7 @@ renderer.domElement.focus();
 
     while (accumulator >= PHYSICS_DT) {
       arena.update(elapsed, PHYSICS_DT);
-      player.update(physics.world, movement, moveDirection, camera.camera.position, PHYSICS_DT);
+      player.update(physics.world, movement, moveDirection, PHYSICS_DT);
 
       if (pendingDash) {
         player.dash(physics.world);

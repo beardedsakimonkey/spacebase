@@ -3,7 +3,7 @@ import { characterAnimationAsset, characterMannequinAsset } from "./assets";
 import { loadGltf } from "./util/kaykit";
 import { remapMannequinBodyColor, type MannequinBodyColor } from "./util/mannequin";
 
-type PlayerAnimationName = "idle" | "run" | "jumpStart" | "jumpIdle" | "jumpLand" | "dash";
+type PlayerAnimationName = "idle" | "run" | "jumpStart" | "jumpIdle" | "jumpLand" | "dash" | "wallHit";
 
 export type PlayerAnimationFrameState = {
   hadGroundContact: boolean;
@@ -15,8 +15,11 @@ export type PlayerAnimationFrameState = {
 const RUN_ANIMATION_BASE_SPEED = 8.2;
 const ANIMATION_FADE_SECONDS = 0.12;
 const JUMP_START_ANIMATION_SECONDS = 0.28;
+const JUMP_START_ANIMATION_START_TIME = 0.18;
 const LAND_ANIMATION_SECONDS = 0.24;
 const DASH_ANIMATION_SECONDS = 0.40;
+const WALL_HIT_ANIMATION_SECONDS = 0.5;
+const WALL_HIT_ANIMATION_START_TIME = 0.18;
 const PLAYER_MODEL_SCALE = 1.0;
 const PLAYER_MODEL_OFFSET_Y = -1.1;
 const PLAYER_BODY_COLOR: MannequinBodyColor = "yellow";
@@ -28,6 +31,7 @@ export class PlayerAnimator {
   private jumpStartAnimationTimer = 0;
   private landAnimationTimer = 0;
   private dashAnimationTimer = 0;
+  private wallHitAnimationTimer = 0;
 
   async loadVisualModel(group: THREE.Group) {
     const [modelGltf, generalGltf, movementGltf, movementAdvancedGltf] = await Promise.all([
@@ -63,6 +67,7 @@ export class PlayerAnimator {
     this.animationActions.clear();
     this.activeAnimation = null;
     this.bindAnimation("idle", model, generalClips, "Idle_A");
+    this.bindAnimation("wallHit", model, generalClips, "Hit_B", true);
     this.bindAnimation("run", model, movementClips, "Running_B");
     this.bindAnimation("jumpStart", model, movementClips, "Jump_Start", true);
     this.bindAnimation("jumpIdle", model, movementClips, "Jump_Idle");
@@ -75,17 +80,27 @@ export class PlayerAnimator {
     this.jumpStartAnimationTimer = 0;
     this.landAnimationTimer = 0;
     this.dashAnimationTimer = 0;
+    this.wallHitAnimationTimer = 0;
     this.playAnimation("idle", 0.05);
   }
 
   startDash() {
     this.dashAnimationTimer = DASH_ANIMATION_SECONDS;
+    this.wallHitAnimationTimer = 0;
+    this.jumpStartAnimationTimer = 0;
+    this.landAnimationTimer = 0;
+  }
+
+  startWallHit() {
+    this.wallHitAnimationTimer = WALL_HIT_ANIMATION_SECONDS;
+    this.dashAnimationTimer = 0;
     this.jumpStartAnimationTimer = 0;
     this.landAnimationTimer = 0;
   }
 
   startJump() {
     this.jumpStartAnimationTimer = JUMP_START_ANIMATION_SECONDS;
+    this.wallHitAnimationTimer = 0;
     this.landAnimationTimer = 0;
   }
 
@@ -159,6 +174,11 @@ export class PlayerAnimator {
     hasGroundContact: boolean,
     dt: number,
   ): PlayerAnimationName {
+    if (this.wallHitAnimationTimer > 0) {
+      this.wallHitAnimationTimer = Math.max(0, this.wallHitAnimationTimer - dt);
+      return "wallHit";
+    }
+
     if (this.dashAnimationTimer > 0) {
       this.dashAnimationTimer = Math.max(0, this.dashAnimationTimer - dt);
       return "dash";
@@ -194,6 +214,11 @@ export class PlayerAnimator {
     const previous = this.activeAnimation ? this.animationActions.get(this.activeAnimation) : undefined;
     next.enabled = true;
     next.reset();
+    if (name === "jumpStart") {
+      next.time = JUMP_START_ANIMATION_START_TIME;
+    } else if (name === "wallHit") {
+      next.time = WALL_HIT_ANIMATION_START_TIME;
+    }
     next.setEffectiveWeight(1);
     next.fadeIn(fadeSeconds).play();
     previous?.fadeOut(fadeSeconds);

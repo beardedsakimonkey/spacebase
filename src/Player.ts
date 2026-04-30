@@ -94,10 +94,11 @@ const DASH_IMPULSE = 30;
 const DASH_DURATION = 0.44;
 const DASH_COOLDOWN = 0.7;
 const DASH_WALL_SWEEP_PADDING = 0.08;
-const DASH_WALL_MIN_SPEED = 2;
+const DASH_WALL_MIN_SPEED = 3;
 const DASH_WALL_MIN_HORIZONTAL_NORMAL = 0.45;
 const DASH_WALL_MIN_OPPOSING_DOT = 0.35;
 const DASH_WALL_BOUNCE_SPEED = 8;
+const DASH_WALL_BOUNCE_VERTICAL_SPEED = -2;
 const DASH_WALL_BOUNCE_CONTROL_LOCK = 0.18;
 const DASH_INITIAL_WALL_CHECK_DT = 1 / 60;
 
@@ -500,13 +501,13 @@ export class PlayerController {
       return false;
     }
 
-    const velocity = this.body.motionProperties.linearVelocity;
     dashVelocity[0] = dashWallNormal[0] * DASH_WALL_BOUNCE_SPEED;
-    dashVelocity[1] = velocity[1];
+    dashVelocity[1] = DASH_WALL_BOUNCE_VERTICAL_SPEED;
     dashVelocity[2] = dashWallNormal[2] * DASH_WALL_BOUNCE_SPEED;
     rigidBody.setLinearVelocity(world, this.body, dashVelocity);
     this.dashTimer = 0;
     this.dashBounceControlTimer = DASH_WALL_BOUNCE_CONTROL_LOCK;
+    this.animator.startWallHit();
     return true;
   }
 

@@ -104,7 +104,7 @@ export class PlayerController {
   private readonly dashDirection: Vec3 = vec3.fromValues(0, 0, 1);
   private jumpGroundIgnoreTimer = 0;
   private jumpWasHeld = false;
-  private airJumpsRemaining = 0;
+  private canAirJump = false;
   private airDashUsed = false;
 
   constructor(world: World, layers: PhysicsLayers, scene: THREE.Scene) {
@@ -181,7 +181,7 @@ export class PlayerController {
     this.dashCooldownTimer = 0;
     this.jumpGroundIgnoreTimer = 0;
     this.jumpWasHeld = false;
-    this.airJumpsRemaining = 0;
+    this.canAirJump = false;
     this.airDashUsed = false;
     this.hasGroundContact = false;
     this.canGroundJump = false;
@@ -231,7 +231,7 @@ export class PlayerController {
   }
 
   private canUseJump() {
-    return this.canGroundJump || (!this.hasGroundContact && this.airJumpsRemaining > 0);
+    return this.canGroundJump || (!this.hasGroundContact && this.canAirJump);
   }
 
   getTelemetry(): PlayerTelemetry {
@@ -271,6 +271,8 @@ export class PlayerController {
     }
   }
 
+  // Refreshes grounded state from a downward foot ray, including surface velocity,
+  // slope eligibility for jumping, and air-move refills on valid ground.
   private updateGround(world: World) {
     vec3.set(groundSlopeNormal, 0, 1, 0);
     this.canGroundJump = false;
@@ -322,7 +324,7 @@ export class PlayerController {
       );
       this.canGroundJump = slopeAngle < MAX_SLOPE_ANGLE;
       if (this.canGroundJump) {
-        this.airJumpsRemaining = 1;
+        this.canAirJump = true;
         this.airDashUsed = false;
       }
     }
@@ -419,8 +421,8 @@ export class PlayerController {
     }
 
     if (!this.canGroundJump) {
-      // Ground contact refills this budget; airborne jumps spend it until the next valid landing.
-      this.airJumpsRemaining = Math.max(0, this.airJumpsRemaining - 1);
+      // Ground contact re-enables the air jump; using it disables it until the next valid landing.
+      this.canAirJump = false;
     }
 
     const velocity = this.body.motionProperties.linearVelocity;
@@ -430,6 +432,8 @@ export class PlayerController {
     this.animator.startJump();
   }
 
+  // Uses lighter gravity while rising or grounded, heavier gravity while falling,
+  // and disables extra acceleration after the terminal fall speed is reached.
   private updateGravityScale() {
     const verticalVelocity = this.body.motionProperties.linearVelocity[1];
     if (verticalVelocity < -MAX_FALL_SPEED) {

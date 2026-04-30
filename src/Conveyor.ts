@@ -23,6 +23,7 @@ type ConveyorUserData = {
 
 const CONVEYOR_SPEED = 6.0;
 const CONVEYOR_TEXTURE_SCROLL_SPEED = 1.2;
+const CONVEYOR_MIN_CONTACT_FRICTION = 2.0;
 const CONVEYOR_HALF_Y = 0.5;
 const CONVEYOR_Y = -1;
 const CONVEYOR_CENTER_Y = -0.5;
@@ -88,7 +89,7 @@ export function createConveyorListener(): Listener {
       return;
     }
 
-    settings.combinedFriction = Math.max(settings.combinedFriction, 3.5);
+    settings.combinedFriction = Math.max(settings.combinedFriction, CONVEYOR_MIN_CONTACT_FRICTION);
 
     if (velocityA) {
       settings.relativeLinearSurfaceVelocity[0] -= velocityA[0];

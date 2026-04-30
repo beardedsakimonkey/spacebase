@@ -10,10 +10,7 @@ const RAW_POINTER_MOUSEMOVE_SUPPRESSION_MS = 50;
 
 export class InputController {
   private readonly keys = new Set<string>();
-  private interactPressed = false;
-  private throwPressed = false;
-  private throwReleased = false;
-  private resetPressed = false;
+  private dashPressed = false;
   private pointerX = window.innerWidth / 2;
   private pointerY = window.innerHeight / 2;
   private hasPointerPosition = false;
@@ -31,8 +28,6 @@ export class InputController {
     document.addEventListener("pointerrawupdate", (event) => this.handlePointerRawUpdate(event));
     // Keep mousemove as the fallback: Firefox doesn't set movementX/Y on PointerEvent under pointer lock.
     window.addEventListener("mousemove", (event) => this.handlePointerMove(event));
-    window.addEventListener("pointerup", (event) => this.handlePointerUp(event));
-    window.addEventListener("pointercancel", (event) => this.handlePointerUp(event));
     target.addEventListener("contextmenu", (event) => event.preventDefault());
   }
 
@@ -53,27 +48,9 @@ export class InputController {
     return delta;
   }
 
-  consumeInteractPressed() {
-    const pressed = this.interactPressed;
-    this.interactPressed = false;
-    return pressed;
-  }
-
-  consumeThrowPressed() {
-    const pressed = this.throwPressed;
-    this.throwPressed = false;
-    return pressed;
-  }
-
-  consumeThrowReleased() {
-    const released = this.throwReleased;
-    this.throwReleased = false;
-    return released;
-  }
-
-  consumeResetPressed() {
-    const pressed = this.resetPressed;
-    this.resetPressed = false;
+  consumeDashPressed() {
+    const pressed = this.dashPressed;
+    this.dashPressed = false;
     return pressed;
   }
 
@@ -92,15 +69,6 @@ export class InputController {
   }
 
   private handleKeyDown(event: KeyboardEvent) {
-    if (!event.repeat) {
-      if (event.code === "KeyE") {
-        this.interactPressed = true;
-      }
-      if (event.code === "KeyR") {
-        this.resetPressed = true;
-      }
-    }
-
     if (["Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.code)) {
       event.preventDefault();
     }
@@ -118,7 +86,7 @@ export class InputController {
     this.hasPointerPosition = true;
 
     if (event.button === 0) {
-      this.throwPressed = true;
+      this.dashPressed = true;
     }
   }
 
@@ -155,12 +123,6 @@ export class InputController {
 
     if (event.movementX !== 0 || event.movementY !== 0) {
       this.rawPointerActiveUntil = performance.now() + RAW_POINTER_MOUSEMOVE_SUPPRESSION_MS;
-    }
-  }
-
-  private handlePointerUp(event: PointerEvent) {
-    if (event.button === 0) {
-      this.throwReleased = true;
     }
   }
 

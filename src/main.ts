@@ -10,7 +10,6 @@ import { PlayerController } from "./Player";
 import { createPhysicsContext, syncPhysicsEntities } from "./physics";
 
 const PHYSICS_DT = 1 / 60;
-const THROW_CHARGE_SECONDS = 1.8;
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) {
@@ -55,20 +54,7 @@ renderer.domElement.focus();
   let accumulator = 0;
   let elapsed = 0;
   let lastPhysicsMs = 0;
-  let pendingDrop = false;
-  let pendingThrowPress = false;
-  let pendingThrowRelease = false;
-  let pendingChargedThrow = false;
   let pendingDash = false;
-  let pendingReset = false;
-  const throwDirection = new THREE.Vector3();
-  const throwVelocity = new THREE.Vector3();
-  const throwVelocityVec: [number, number, number] = [0, 0, 0];
-  let throwCharging = false;
-  let throwChargePower = 0;
-  let throwWindupTimer = 0;
-  const pendingThrowParams = { direction: new THREE.Vector3(), power: 0, active: false };
-  const THROW_WINDUP_SECONDS = 0.2;
 
   function animationFrame(now: number) {
     requestAnimationFrame(animationFrame);
@@ -80,88 +66,20 @@ renderer.domElement.focus();
 
     const lookDelta = input.consumeLookDelta();
     camera.applyLookDelta(lookDelta.yaw, lookDelta.pitch);
-
-    pendingDrop ||= input.consumeInteractPressed();
-    pendingThrowPress ||= input.consumeThrowPressed();
-    pendingThrowRelease ||= input.consumeThrowReleased();
-    pendingReset ||= input.consumeResetPressed();
+    pendingDash ||= input.consumeDashPressed();
 
     const movement = input.movement;
     const forwardAmount = Number(movement.forward) - Number(movement.backward);
     const rightAmount = Number(movement.right) - Number(movement.left);
     const moveDirection = camera.getMoveDirection(forwardAmount, rightAmount);
 
-    if (pendingDrop && throwCharging) {
-      throwCharging = false;
-      pendingChargedThrow = false;
-    }
-
-    if (pendingThrowPress) {
-      if (ball.isHeld()) {
-        throwCharging = true;
-        throwChargePower = 0;
-      } else {
-        pendingDash = true;
-      }
-      pendingThrowPress = false;
-    }
-
-    if (throwCharging) {
-      throwChargePower = Math.min(1, throwChargePower + frameTime / THROW_CHARGE_SECONDS);
-      camera.getPointerRayDirection(input.getPointerPosition(), renderer.domElement, throwDirection);
-      ball.computeThrowVelocity(throwVelocityVec, player, throwDirection, throwChargePower);
-      throwVelocity.set(throwVelocityVec[0], throwVelocityVec[1], throwVelocityVec[2]);
-
-      // Reaching full charge auto-throws even if the mouse button stays held.
-      if (throwChargePower >= 1) {
-        pendingChargedThrow = true;
-      }
-    }
-
-    if (pendingThrowRelease) {
-      if (throwCharging) {
-        pendingChargedThrow = true;
-      }
-      pendingThrowRelease = false;
-    }
-
     while (accumulator >= PHYSICS_DT) {
-      if (pendingReset) {
-        player.reset(physics.world);
-        pendingReset = false;
-      }
-
       arena.update(elapsed, PHYSICS_DT);
       player.update(physics.world, movement, moveDirection, camera.camera.position, PHYSICS_DT);
-
-      if (pendingDrop) {
-        ball.drop(physics.world);
-        pendingDrop = false;
-      }
-      ball.update(physics.world, player, PHYSICS_DT);
 
       if (pendingDash) {
         player.dash(physics.world);
         pendingDash = false;
-      }
-
-      if (pendingChargedThrow) {
-        player.startThrowAnimation(throwDirection);
-        pendingThrowParams.direction.copy(throwDirection);
-        pendingThrowParams.power = throwChargePower;
-        pendingThrowParams.active = true;
-        throwWindupTimer = THROW_WINDUP_SECONDS;
-        throwCharging = false;
-        throwChargePower = 0;
-        pendingChargedThrow = false;
-      }
-
-      if (pendingThrowParams.active) {
-        throwWindupTimer -= PHYSICS_DT;
-        if (throwWindupTimer <= 0) {
-          ball.throw(physics.world, player, pendingThrowParams.direction, pendingThrowParams.power);
-          pendingThrowParams.active = false;
-        }
       }
 
       const physicsStart = performance.now();

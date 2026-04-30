@@ -34,15 +34,6 @@ type PlayerInputState = {
   wantToJump: boolean;
 };
 
-const PLAYER_MODEL_SCALE = 1.0;
-const PLAYER_MODEL_OFFSET_Y = -1.1;
-const PLAYER_BODY_COLOR: MannequinBodyColor = "yellow";
-const MOVE_INPUT_EPSILON = 0.001;
-const MIN_SAFE_DURATION = 0.001;
-const MAX_GROUND_CORRECTION_SPEED = 2;
-const RESPAWN_Y = -14;
-const PLAYER_SPAWN_POSITION: Vec3 = [0, 3.5, 0];
-
 const rayCollector = createClosestCastRayCollector();
 const raySettings = createDefaultCastRaySettings();
 
@@ -55,12 +46,6 @@ const impulsePoint: Vec3 = vec3.create();
 const dragImpulse: Vec3 = vec3.create();
 const groundHitPosition: Vec3 = vec3.create();
 const groundSlopeNormal: Vec3 = vec3.fromValues(0, 1, 0);
-const bodyUp: Vec3 = vec3.create();
-const bodyForward: Vec3 = vec3.create();
-const desiredForward: Vec3 = vec3.create();
-const upCorrection: Vec3 = vec3.create();
-const yawCorrection: Vec3 = vec3.create();
-const balanceTorque: Vec3 = vec3.create();
 const dashVelocity: Vec3 = vec3.create();
 const worldUp: Vec3 = vec3.fromValues(0, 1, 0);
 const visualPosition = new THREE.Vector3();
@@ -72,6 +57,14 @@ function normalizeAngle(angle: number) {
   return angle;
 }
 
+const PLAYER_MODEL_SCALE = 1.0;
+const PLAYER_MODEL_OFFSET_Y = -1.1;
+const PLAYER_BODY_COLOR: MannequinBodyColor = "yellow";
+const MOVE_INPUT_EPSILON = 0.001;
+const MIN_SAFE_DURATION = 0.001;
+const MAX_GROUND_CORRECTION_SPEED = 2;
+const RESPAWN_Y = -14;
+const PLAYER_SPAWN_POSITION: Vec3 = [0, 3.5, 0];
 const CAPSULE_RADIUS = 0.58;
 const CAPSULE_HALF_HEIGHT = 0.51;
 const MAX_RUN_SPEED = 7;
@@ -82,10 +75,6 @@ const DRAG_DAMPING_C = 0.18;
 const MOVE_IMPULSE_POINT_Y = 0.51;
 const PLAYER_FRICTION = 0.35;
 const MAX_SLOPE_ANGLE = 0.95;
-const BALANCE_SPRING_K = 0.42;
-const BALANCE_DAMPING_C = 0.16;
-const BALANCE_YAW_SPRING_K = 0.38;
-const BALANCE_YAW_DAMPING_C = 0.08;
 const JUMP_VELOCITY = 6.8;
 const NORMAL_GRAVITY_SCALE = 0.85;
 const FALLING_GRAVITY_SCALE = 2;
@@ -182,7 +171,6 @@ export class PlayerController {
     }
 
     this.applyGroundContactCorrection(world);
-    this.applyAutoBalanceImpulse(world);
     this.handleJump(world);
     this.updateGravityScale();
     this.updateAnimation(dt);
@@ -466,32 +454,6 @@ export class PlayerController {
     ]);
   }
 
-  private applyAutoBalanceImpulse(world: World) {
-    const bodyRotation = this.body.quaternion;
-    vec3.set(bodyUp, 0, 1, 0);
-    vec3.transformQuat(bodyUp, bodyUp, bodyRotation);
-    vec3.set(bodyForward, 0, 0, 1);
-    vec3.transformQuat(bodyForward, bodyForward, bodyRotation);
-
-    vec3.cross(upCorrection, bodyUp, worldUp);
-
-    desiredForward[0] = Math.sin(this.facingYaw);
-    desiredForward[1] = 0;
-    desiredForward[2] = Math.cos(this.facingYaw);
-    bodyForward[1] = 0;
-    if (vec3.length(bodyForward) > MOVE_INPUT_EPSILON) {
-      vec3.normalize(bodyForward, bodyForward);
-    }
-    vec3.cross(yawCorrection, bodyForward, desiredForward);
-
-    const angularVelocity = this.body.motionProperties.angularVelocity;
-    balanceTorque[0] = upCorrection[0] * BALANCE_SPRING_K - angularVelocity[0] * BALANCE_DAMPING_C;
-    balanceTorque[1] = yawCorrection[1] * BALANCE_YAW_SPRING_K - angularVelocity[1] * BALANCE_YAW_DAMPING_C;
-    balanceTorque[2] = upCorrection[2] * BALANCE_SPRING_K - angularVelocity[2] * BALANCE_DAMPING_C;
-
-    rigidBody.addAngularImpulse(world, this.body, balanceTorque);
-  }
-
   private handleJump(world: World) {
     const jumpPressed = this.input.wantToJump && !this.jumpWasHeld;
     this.jumpWasHeld = this.input.wantToJump;
@@ -526,7 +488,7 @@ export class PlayerController {
   syncVisual() {
     const position = this.body.position;
     this.object.position.set(position[0], position[1], position[2]);
-    // Render with stable gameplay yaw; physics auto-balance can jitter while correcting capsule rotation.
+    // Render with stable gameplay yaw instead of collision-driven capsule rotation.
     this.object.rotation.set(0, this.facingYaw, 0);
   }
 }

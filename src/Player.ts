@@ -39,12 +39,10 @@ const rayCollector = createClosestCastRayCollector();
 const raySettings = createDefaultCastRaySettings();
 
 const rayOrigin: Vec3 = vec3.create();
-const currentHorizontal: Vec3 = vec3.create();
 const desiredHorizontal: Vec3 = vec3.create();
 const deltaVelocity: Vec3 = vec3.create();
-const moveImpulse: Vec3 = vec3.create();
+const horizontalImpulse: Vec3 = vec3.create();
 const impulsePoint: Vec3 = vec3.create();
-const dragImpulse: Vec3 = vec3.create();
 const groundHitPosition: Vec3 = vec3.create();
 const groundSlopeNormal: Vec3 = vec3.fromValues(0, 1, 0);
 const dashVelocity: Vec3 = vec3.create();
@@ -165,12 +163,11 @@ export class PlayerController {
     this.updateGround(world);
     this.applyLandingDamping(world);
 
+    // Dash is an explicit velocity override; otherwise use the softer horizontal motor.
     if (this.dashTimer > 0) {
       this.applyDashVelocity(world);
-    } else if (this.hasMoveInput()) {
-      this.applyMovementImpulse(world);
     } else {
-      this.applyDragImpulse(world);
+      this.applyHorizontalControl(world);
     }
 
     this.applyGroundContactCorrection(world);
@@ -364,38 +361,49 @@ export class PlayerController {
     }
   }
 
-  private applyMovementImpulse(world: World) {
-    const targetSpeed = MAX_RUN_SPEED;
+  private applyHorizontalControl(world: World) {
+    const hasMoveInput = this.hasMoveInput();
+    if (!hasMoveInput && !this.canGroundJump) {
+      // Preserve airborne momentum when the player releases movement input.
+      return;
+    }
+
     const currentVelocity = this.body.motionProperties.linearVelocity;
+    const targetSpeed = hasMoveInput ? MAX_RUN_SPEED : 0;
 
-    currentHorizontal[0] = currentVelocity[0];
-    currentHorizontal[1] = 0;
-    currentHorizontal[2] = currentVelocity[2];
-
+    // Horizontal velocity is controlled relative to the surface so conveyors add to,
+    // rather than cancel, player motion.
     desiredHorizontal[0] = this.input.moveDirection[0] * targetSpeed;
     desiredHorizontal[1] = 0;
     desiredHorizontal[2] = this.input.moveDirection[2] * targetSpeed;
-    // Run speed is measured relative to the surface so conveyors add to, rather than cancel, player motion.
     desiredHorizontal[0] += this.groundSurfaceVelocity[0];
-    desiredHorizontal[1] += this.groundSurfaceVelocity[1];
     desiredHorizontal[2] += this.groundSurfaceVelocity[2];
 
-    deltaVelocity[0] = desiredHorizontal[0] - currentHorizontal[0];
+    deltaVelocity[0] = desiredHorizontal[0] - currentVelocity[0];
     deltaVelocity[1] = 0;
-    deltaVelocity[2] = desiredHorizontal[2] - currentHorizontal[2];
+    deltaVelocity[2] = desiredHorizontal[2] - currentVelocity[2];
 
-    const air = this.canGroundJump ? 1 : AIR_CONTROL_FACTOR;
     const acceleration = 1 / Math.max(MIN_SAFE_DURATION, ACCELERATION_TIME);
+    const controlStrength = hasMoveInput
+      ? acceleration * (this.canGroundJump ? 1 : AIR_CONTROL_FACTOR)
+      : DRAG_DAMPING_C;
 
-    moveImpulse[0] = deltaVelocity[0] * acceleration * air;
-    moveImpulse[1] = 0;
-    moveImpulse[2] = deltaVelocity[2] * acceleration * air;
+    horizontalImpulse[0] = deltaVelocity[0] * controlStrength;
+    horizontalImpulse[1] = 0;
+    horizontalImpulse[2] = deltaVelocity[2] * controlStrength;
+
+    if (!hasMoveInput) {
+      // Idle braking is a center impulse so it slows drift without adding rotation.
+      rigidBody.addImpulse(world, this.body, horizontalImpulse);
+      return;
+    }
 
     const position = this.body.position;
     impulsePoint[0] = position[0];
     impulsePoint[1] = position[1] + MOVE_IMPULSE_POINT_Y;
     impulsePoint[2] = position[2];
-    rigidBody.addImpulseAtPosition(world, this.body, moveImpulse, impulsePoint);
+    // Movement pushes above center so the dynamic body still reacts physically to locomotion.
+    rigidBody.addImpulseAtPosition(world, this.body, horizontalImpulse, impulsePoint);
   }
 
   private applyDashVelocity(world: World, includeUpwardImpulse = false) {
@@ -422,22 +430,12 @@ export class PlayerController {
     }
   }
 
-  private applyDragImpulse(world: World) {
-    if (!this.canGroundJump) {
-      return;
-    }
-    const velocity = this.body.motionProperties.linearVelocity;
-    dragImpulse[0] = -(velocity[0] - this.groundSurfaceVelocity[0]) * DRAG_DAMPING_C;
-    dragImpulse[1] = 0;
-    dragImpulse[2] = -(velocity[2] - this.groundSurfaceVelocity[2]) * DRAG_DAMPING_C;
-    rigidBody.addImpulse(world, this.body, dragImpulse);
-  }
-
   private applyGroundContactCorrection(world: World) {
     if (!this.hasGroundContact) {
       return;
     }
 
+    // Ground snap is vertical-only; horizontal control is handled by applyHorizontalControl().
     const velocity = this.body.motionProperties.linearVelocity;
     const contactError = CAPSULE_RADIUS - this.groundDistance;
     if (contactError <= GROUND_CONTACT_TOLERANCE) {

@@ -8,21 +8,6 @@ Root:
 
 ```ts
 const PLATFORMER_PACK = "/assets/KayKit_Platformer_Pack_1.0_SOURCE";
-const PLATFORMER_GLTF = `${PLATFORMER_PACK}/Assets/gltf`;
-```
-
-Use colored assets with:
-
-```ts
-platformerAsset("blue", "platform_6x6x4")
-// /assets/KayKit_Platformer_Pack_1.0_SOURCE/Assets/gltf/blue/platform_6x6x4_blue.gltf
-```
-
-Use neutral assets with:
-
-```ts
-platformerNeutralAsset("spring")
-// /assets/KayKit_Platformer_Pack_1.0_SOURCE/Assets/gltf/neutral/spring.gltf
 ```
 
 Available colors:
@@ -233,41 +218,12 @@ strut_horizontal
 strut_vertical
 ```
 
-## Common Compositions
-
-Spring pad:
-
-```ts
-const spring = await loadGltfScene(platformerNeutralAsset("spring"));
-const pad = await loadGltfScene(platformerAsset("blue", "spring_pad"));
-
-const springPad = new THREE.Group();
-springPad.add(spring);
-springPad.add(pad);
-```
-
-The neutral spring and colored pad are separate visuals but should usually be one gameplay object with one physics trigger/collider.
-
 ## Character Pack
 
 Root:
 
 ```ts
 const CHARACTER = "/assets/KayKit_Character_Animations_1.1";
-```
-
-Use mannequin models with:
-
-```ts
-characterMannequinAsset("medium")
-// /assets/KayKit_Character_Animations_1.1/Mannequin Character/characters/Mannequin_Medium.glb
-```
-
-Use animation bundles with:
-
-```ts
-characterAnimationAsset("medium", "movement_basic")
-// /assets/KayKit_Character_Animations_1.1/Animations/gltf/Rig_Medium/Rig_Medium_MovementBasic.glb
 ```
 
 Mannequins:
@@ -299,13 +255,4 @@ movement_basic -> Rig_Medium_MovementBasic.glb
 simulation -> Rig_Medium_Simulation.glb
 special -> Rig_Medium_Special.glb
 tools -> Rig_Medium_Tools.glb
-```
-
-Currently used by the player:
-
-```txt
-Mannequin_Medium.glb
-Rig_Medium_General.glb
-Rig_Medium_MovementBasic.glb
-Rig_Medium_MovementAdvanced.glb
 ```

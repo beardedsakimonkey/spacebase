@@ -70,7 +70,7 @@ const MOVE_INPUT_EPSILON = 0.001;
 const MIN_SAFE_DURATION = 0.001;
 const MAX_GROUND_CORRECTION_SPEED = 2;
 const RESPAWN_Y = -14;
-const PLAYER_SPAWN_POSITION: Vec3 = [0, 3.5, 0];
+const PLAYER_SPAWN_POSITION: Vec3 = [0, 1.5, 0];
 const CAPSULE_RADIUS = 0.58;
 const CAPSULE_HALF_HEIGHT = 0.51;
 const PLAYER_ALLOWED_DEGREES_OF_FREEDOM = dof(true, true, true, false, false, false);
@@ -176,6 +176,11 @@ export class PlayerController {
     this.input.wantToJump = input.jump;
     vec3.set(this.input.moveDirection, cameraMoveDirection.x, 0, cameraMoveDirection.z);
 
+    if (this.animator.isSpawnAnimationActive()) {
+      this.updateSpawnHover(world, dt);
+      return;
+    }
+
     this.updateFacingYaw(dt);
     this.updateGround(world);
 
@@ -220,6 +225,10 @@ export class PlayerController {
   }
 
   dash(world: World) {
+    if (this.animator.isSpawnAnimationActive()) {
+      return false;
+    }
+
     if (this.dashCooldownTimer > 0) {
       return false;
     }
@@ -287,6 +296,21 @@ export class PlayerController {
       wantsRunAnimation: this.hasMoveInput() || this.dashTimer > 0,
       horizontalSpeed: Math.hypot(velocity[0], velocity[2]),
     });
+  }
+
+  private updateSpawnHover(world: World, dt: number) {
+    this.hasGroundContact = false;
+    this.canGroundJump = false;
+    this.groundDistance = 0;
+    this.groundRestDistance = CAPSULE_RADIUS;
+    vec3.set(this.groundSurfaceVelocity, 0, 0, 0);
+
+    rigidBody.setPosition(world, this.body, PLAYER_SPAWN_POSITION, false);
+    rigidBody.setLinearVelocity(world, this.body, [0, 0, 0]);
+    rigidBody.setAngularVelocity(world, this.body, [0, 0, 0]);
+    this.body.motionProperties.gravityFactor = 0;
+
+    this.updateAnimation(dt);
   }
 
   private updateFacingYaw(dt: number) {

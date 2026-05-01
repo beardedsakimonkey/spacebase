@@ -41,7 +41,7 @@ const SHORT_JUMP_ANIMATION_SECONDS = 0.42;
 const LAND_ANIMATION_SECONDS = 0.24;
 const DASH_ANIMATION_SECONDS = 0.40;
 const WALL_HIT_ANIMATION_SECONDS = 0.5;
-const SPAWN_ANIMATION_SECONDS = 1.3;
+const SPAWN_ANIMATION_SECONDS = .5;
 const PLAYER_MODEL_SCALE = 1.0;
 const PLAYER_MODEL_OFFSET_Y = -1.1;
 
@@ -112,6 +112,10 @@ export class PlayerAnimator {
     return this.activeAnimation;
   }
 
+  isSpawnAnimationActive() {
+    return this.spawnAnimationTimer > 0 || this.activeAnimation === "spawn";
+  }
+
   startDash() {
     this.clearAllTimers();
     this.dashAnimationTimer = DASH_ANIMATION_SECONDS;
@@ -133,10 +137,6 @@ export class PlayerAnimator {
   }
 
   update(dt: number, state: PlayerAnimationFrameState) {
-    if (!this.animationMixer) {
-      return;
-    }
-
     if (!state.hadGroundContact && state.hasGroundContact) {
       // Spawn starts airborne, so its first ground contact should not queue a landing animation.
       if (this.spawnAnimationTimer <= 0) {
@@ -148,6 +148,10 @@ export class PlayerAnimator {
     }
 
     const desired = this.advanceAndSelectAnimation(state.wantsRunAnimation, state.hasGroundContact, dt);
+    if (!this.animationMixer) {
+      return;
+    }
+
     const action = this.animationActions.get(desired);
     if (action) {
       action.timeScale = this.getAnimationTimeScale(desired, state.horizontalSpeed);

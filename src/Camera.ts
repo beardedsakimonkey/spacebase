@@ -21,7 +21,7 @@ export class Camera {
   readonly camera: THREE.PerspectiveCamera;
   yaw = Math.PI * 0.22;
   pitch = -0.55;
-  distance = 12;
+  distance = 10;
   lowPitchDistance = 8.4;
   targetHeight = 1.25;
 

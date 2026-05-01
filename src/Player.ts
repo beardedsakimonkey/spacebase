@@ -226,14 +226,10 @@ export class PlayerController {
       return false;
     }
 
-    if (this.hasMoveInput()) {
-      vec3.normalize(this.dashDirection, this.input.moveDirection);
-    } else {
-      const forward = this.getForward();
-      this.dashDirection[0] = forward.x;
-      this.dashDirection[1] = 0;
-      this.dashDirection[2] = forward.z;
-    }
+    const forward = this.getForward();
+    this.dashDirection[0] = forward.x;
+    this.dashDirection[1] = 0;
+    this.dashDirection[2] = forward.z;
     this.facingYaw = Math.atan2(this.dashDirection[0], this.dashDirection[2]);
     this.dashTimer = DASH_DURATION;
     this.dashCooldownTimer = DASH_COOLDOWN;

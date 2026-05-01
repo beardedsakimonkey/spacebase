@@ -12,7 +12,7 @@ type GuiValues = {
 };
 
 export class Gui {
-  private readonly gui = new GUI({ width: 280 });
+  private readonly gui = new GUI({ title: '', width: 280 });
   private readonly stats = new Stats();
   private readonly values: GuiValues;
   private readonly readoutControllers: Controller[] = [];

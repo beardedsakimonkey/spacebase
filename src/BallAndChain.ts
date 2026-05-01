@@ -1,6 +1,7 @@
 import {
   box,
   ConstraintSpace,
+  dof,
   MotionQuality,
   MotionType,
   pointConstraint,
@@ -17,7 +18,7 @@ import { loadGltfScene } from "./util/kaykit";
 export type BallAndChainModels = {
   anchor: THREE.Group;
   chainLink: THREE.Group;
-  spikeball: THREE.Group;
+  spikeballHanger: THREE.Group;
 };
 
 const ANCHOR_POSITION: Vec3 = [0, 7.3, 0];
@@ -26,21 +27,21 @@ const LINK_COUNT = 14;
 const LINK_HALF_EXTENTS: Vec3 = [0.24, 0.34, 0.08];
 const LINK_CENTER_SPACING = 0.48;
 const LINK_JOINT_OFFSET = LINK_CENTER_SPACING * 0.5;
-const LINK_MASS = 0.22;
+const LINK_ALLOWED_DEGREES_OF_FREEDOM = dof(true, true, true, true, false, true);
 const SPIKEBALL_RADIUS = 1.15;
-const SPIKEBALL_ATTACHMENT_OFFSET = 1.05;
+const SPIKEBALL_HANGER_ATTACHMENT_OFFSET = 1.5;
 const SPIKEBALL_MASS = 9;
 const INITIAL_SPIKEBALL_VELOCITY: Vec3 = [1.4, 0, -0.4];
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
 
 export async function loadBallAndChainModels(): Promise<BallAndChainModels> {
-  const [anchor, chainLink, spikeball] = await Promise.all([
+  const [anchor, chainLink, spikeballHanger] = await Promise.all([
     loadModel(platformerNeutralAsset("structure_A")),
     loadModel(platformerNeutralAsset("chain_link")),
-    loadModel(platformerNeutralAsset("spikeball")),
+    loadModel(platformerNeutralAsset("spikeball_hanger")),
   ]);
 
-  return { anchor, chainLink, spikeball };
+  return { anchor, chainLink, spikeballHanger };
 }
 
 export function addBallAndChain(
@@ -78,7 +79,7 @@ export function addBallAndChain(
     });
   }
 
-  const ballBody = addSpikeball(world, layers, scene, entities, models.spikeball);
+  const ballBody = addSpikeball(world, layers, scene, entities, models.spikeballHanger);
   const ballJoint = getSpikeballJointPosition();
   pointConstraint.create(world, {
     bodyIdA: links[links.length - 1].id,
@@ -157,9 +158,11 @@ function addChainLinks(
       quaternion,
       friction: 0.65,
       restitution: 0.08,
-      mass: LINK_MASS,
+      mass: 0.22,
       linearDamping: 0.06,
-      angularDamping: 0.22,
+      angularDamping: 0.5,
+      maxAngularVelocity: 5,
+      allowedDegreesOfFreedom: LINK_ALLOWED_DEGREES_OF_FREEDOM,
       motionQuality: MotionQuality.LINEAR_CAST,
     });
     entities.push({ body, object });
@@ -229,7 +232,7 @@ function getSpikeballPosition(): Vec3 {
   const joint = getSpikeballJointPosition();
   return [
     joint[0],
-    joint[1] - SPIKEBALL_ATTACHMENT_OFFSET,
+    joint[1] - SPIKEBALL_HANGER_ATTACHMENT_OFFSET,
     joint[2],
   ];
 }

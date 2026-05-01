@@ -16,12 +16,15 @@ import type { PhysicsLayers } from "./physics";
 const FORWARD = new THREE.Vector3();
 const RIGHT = new THREE.Vector3();
 const POINTER_RAY = new THREE.Vector3();
+const DEFAULT_YAW = Math.PI;
+const DEFAULT_PITCH = -0.25;
+const DEFAULT_DISTANCE = 10;
 
 export class Camera {
   readonly camera: THREE.PerspectiveCamera;
-  yaw = Math.PI * 0.22;
-  pitch = -0.55;
-  distance = 10;
+  yaw = DEFAULT_YAW;
+  pitch = DEFAULT_PITCH;
+  distance = DEFAULT_DISTANCE;
   lowPitchDistance = 8.4;
   targetHeight = 1.25;
 
@@ -58,6 +61,14 @@ export class Camera {
   resize(aspect: number) {
     this.camera.aspect = aspect;
     this.camera.updateProjectionMatrix();
+  }
+
+  reset() {
+    this.yaw = DEFAULT_YAW;
+    this.pitch = DEFAULT_PITCH;
+    this.distance = DEFAULT_DISTANCE;
+    this.resolvedDistance = this.distance;
+    this.wasObstructed = false;
   }
 
   applyLookDelta(yawPixels: number, pitchPixels: number) {

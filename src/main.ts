@@ -112,6 +112,7 @@ function configurePhysicsDebugObject(object: THREE.Object3D) {
     while (accumulator >= PHYSICS_DT) {
       if (pendingRespawn) {
         player.reset(physics.world);
+        camera.reset();
         pendingRespawn = false;
       }
 

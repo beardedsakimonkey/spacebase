@@ -24,11 +24,12 @@ import { vec3 } from "mathcat";
 import * as THREE from "three";
 import type { MovementInput } from "./input";
 import { getConveyorVelocity } from "./Conveyor";
-import { PlayerAnimator } from "./PlayerAnimator";
+import { PlayerAnimator, type PlayerAnimationName } from "./PlayerAnimator";
 import type { PhysicsLayers } from "./physics";
 
 export type PlayerTelemetry = {
   speed: number;
+  animation: PlayerAnimationName | null;
 };
 
 type PlayerInputState = {
@@ -264,6 +265,7 @@ export class PlayerController {
     const horizontalSpeed = Math.hypot(velocity[0], velocity[2]);
     return {
       speed: horizontalSpeed,
+      animation: this.animator.getActiveAnimation(),
     };
   }
 

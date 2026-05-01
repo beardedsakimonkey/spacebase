@@ -8,6 +8,7 @@ export type GuiStats = {
 
 type GuiValues = {
   speed: string;
+  animation: string;
   physicsWireframes: boolean;
 };
 
@@ -20,6 +21,7 @@ export class Gui {
   constructor() {
     this.values = {
       speed: "-",
+      animation: "-",
       physicsWireframes: false,
     };
 
@@ -43,6 +45,7 @@ export class Gui {
 
   update(stats: GuiStats) {
     this.values.speed = stats.player.speed.toFixed(2);
+    this.values.animation = stats.player.animation ?? "-";
 
     for (const controller of this.readoutControllers) {
       controller.updateDisplay();
@@ -86,6 +89,7 @@ export class Gui {
 
     this.readoutControllers.push(
       folder.add(this.values, "speed").name("Speed").disable(),
+      folder.add(this.values, "animation").name("Animation").disable(),
     );
   }
 

@@ -6,6 +6,7 @@ import { Arena } from "./Arena";
 import { Camera } from "./Camera";
 import { Gui } from "./gui";
 import { InputController } from "./input";
+import { PassiveCharacter } from "./PassiveCharacter";
 import { PlayerController } from "./Player";
 import { createPhysicsContext, syncPhysicsEntities } from "./physics";
 
@@ -70,6 +71,10 @@ function configurePhysicsDebugObject(object: THREE.Object3D) {
   const input = new InputController(renderer.domElement);
   const arena = await Arena.create(physics.world, physics.layers, scene);
   const player = new PlayerController(physics.world, physics.layers, scene);
+  const passiveCharacters = [
+    new PassiveCharacter(physics.world, physics.layers, scene, [-3.2, 3.5, 2.6], "red", Math.PI * 0.18),
+    new PassiveCharacter(physics.world, physics.layers, scene, [3.2, 3.5, 2.6], "blue", -Math.PI * 0.18),
+  ];
   const playerRenderPosition = new THREE.Vector3();
 
   const gui = new Gui();
@@ -112,6 +117,9 @@ function configurePhysicsDebugObject(object: THREE.Object3D) {
 
       arena.update(elapsed, PHYSICS_DT);
       player.update(physics.world, movement, moveDirection, PHYSICS_DT);
+      for (const character of passiveCharacters) {
+        character.update(PHYSICS_DT);
+      }
 
       if (pendingDash) {
         player.dash(physics.world);
@@ -122,6 +130,9 @@ function configurePhysicsDebugObject(object: THREE.Object3D) {
 
       syncPhysicsEntities(arena.entities);
       player.syncVisual();
+      for (const character of passiveCharacters) {
+        character.syncVisual();
+      }
 
       elapsed += PHYSICS_DT;
       accumulator -= PHYSICS_DT;

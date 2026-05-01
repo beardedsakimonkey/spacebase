@@ -3,7 +3,7 @@ import { characterAnimationAsset, characterMannequinAsset } from "./assets";
 import { loadGltf } from "./util/kaykit";
 import { remapMannequinBodyColor, type MannequinBodyColor } from "./util/mannequin";
 
-type PlayerAnimationName =
+export type PlayerAnimationName =
   | "idle"
   | "run"
   | "jumpStart"
@@ -44,7 +44,6 @@ const WALL_HIT_ANIMATION_SECONDS = 0.5;
 const SPAWN_ANIMATION_SECONDS = 1.3;
 const PLAYER_MODEL_SCALE = 1.0;
 const PLAYER_MODEL_OFFSET_Y = -1.1;
-const PLAYER_BODY_COLOR: MannequinBodyColor = "yellow";
 
 export class PlayerAnimator {
   private readonly animationActions = new Map<PlayerAnimationName, THREE.AnimationAction>();
@@ -57,6 +56,8 @@ export class PlayerAnimator {
   private wallHitAnimationTimer = 0;
   private spawnAnimationTimer = 0;
 
+  constructor(private readonly bodyColor: MannequinBodyColor = "yellow") {}
+
   async loadVisualModel(group: THREE.Group) {
     const [modelGltf, generalGltf, movementGltf, movementAdvancedGltf] = await Promise.all([
       loadGltf(characterMannequinAsset("medium")),
@@ -68,7 +69,7 @@ export class PlayerAnimator {
     const model = modelGltf.scene;
     model.scale.setScalar(PLAYER_MODEL_SCALE);
     model.position.y = PLAYER_MODEL_OFFSET_Y;
-    remapMannequinBodyColor(model, PLAYER_BODY_COLOR);
+    remapMannequinBodyColor(model, this.bodyColor);
     model.traverse((node) => {
       if (node instanceof THREE.Mesh) {
         node.castShadow = true;
@@ -105,6 +106,10 @@ export class PlayerAnimator {
   reset() {
     this.clearAllTimers();
     this.playAnimation("idle", 0.05);
+  }
+
+  getActiveAnimation() {
+    return this.activeAnimation;
   }
 
   startDash() {

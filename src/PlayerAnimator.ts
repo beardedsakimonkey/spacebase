@@ -138,6 +138,7 @@ export class PlayerAnimator {
     }
 
     if (!state.hadGroundContact && state.hasGroundContact) {
+      // Spawn starts airborne, so its first ground contact should not queue a landing animation.
       if (this.spawnAnimationTimer <= 0) {
         this.landAnimationTimer = LAND_ANIMATION_SECONDS;
       }

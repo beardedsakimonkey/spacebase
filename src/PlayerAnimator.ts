@@ -29,7 +29,7 @@ type AnimationTuning = {
 const ANIMATION_TUNING: Partial<Record<PlayerAnimationName, AnimationTuning>> = {
   jumpStart: { startTime: 0.18, timeScale: 2 },
   shortJump: { startTime: 0.3 },
-  jumpLand: { timeScale: 2 },
+  jumpLand: { startTime: 0.18, timeScale: 1.5 },
   wallHit: { startTime: 0.18 },
   dash: { startTime: 0.1 },
 };

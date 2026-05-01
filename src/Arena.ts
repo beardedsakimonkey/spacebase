@@ -1,10 +1,7 @@
 import {
   box,
-  ConstraintSpace,
   convexHull,
-  hingeConstraint,
   MotionType,
-  MotorState,
   rigidBody,
   type Listener,
   type World,
@@ -21,8 +18,9 @@ import {
   loadConveyorModel,
 } from "./Conveyor";
 import { addBallAndChain, loadBallAndChainModels, type BallAndChainModels } from "./BallAndChain";
+import { addRotatingSawTrap, SAW_TRAP_ROTATION_SPEED, spinSawTrapBlades } from "./SawTrap";
 import { addScatteredProps, loadScatteredPropModels, type ScatteredPropModels } from "./ScatteredProps";
-import { createSwiperBodyUserData } from "./Swiper";
+import { addSwiper, SWIPER_ANGULAR_SPEED } from "./Swiper";
 import { buildInstancedMesh, loadGltfMesh, loadGltfScene, type GltfMesh, type TileTransform } from "./util/kaykit";
 import type { PhysicsEntity, PhysicsLayers } from "./physics";
 import { addSky } from "./Sky";
@@ -58,9 +56,6 @@ const OUTER_CORRIDOR_X = RIGHT_BELT_X + CONVEYOR_HALF_X + PLATFORM_HALF_EXTENT;
 const CORRIDOR_XS = [-OUTER_CORRIDOR_X, 0, OUTER_CORRIDOR_X];
 const CORRIDOR_WALL_X = OUTER_CORRIDOR_X + PLATFORM_HALF_EXTENT + BARRIER_HALF_THICKNESS;
 const Y_AXIS: Vec3 = [0, 1, 0];
-const SWIPER_HALF_EXTENTS: Vec3 = [4.5, 0.75, 0.5];
-const SWIPER_CENTER_Y = FLOOR_TOP + SWIPER_HALF_EXTENTS[1];
-const SWIPER_ANGULAR_SPEED = 2.6;
 const RAMP_COLLIDER_SHAPE = convexHull.create({
   positions: [
     -2, 0, -3,
@@ -87,11 +82,12 @@ export class Arena {
   private redConveyorLong!: THREE.Group;
   private blueRamp!: THREE.Group;
   private redRamp!: THREE.Group;
-  private blueSwiperDoubleLong!: THREE.Group;
   private redSwiperDoubleLong!: THREE.Group;
+  private blueSawTrapLong!: THREE.Group;
   private scatteredPropModels!: ScatteredPropModels;
   private ballAndChainModels!: BallAndChainModels;
   private conveyorTextures: THREE.Texture[] = [];
+  private readonly sawTrapBlades: THREE.Object3D[] = [];
 
   private constructor(
     private readonly world: World,
@@ -112,13 +108,14 @@ export class Arena {
     arena.buildRaisedDecks();
     arena.buildScatteredProps();
     arena.buildBallAndChain();
-    arena.buildSwipers();
+    arena.buildRotatingObstacles();
 
     return arena;
   }
 
-  update(time: number, _dt: number) {
+  update(time: number, dt: number) {
     animateConveyorTextures(this.conveyorTextures, time);
+    spinSawTrapBlades(this.sawTrapBlades, dt);
   }
 
   private async loadAssets() {
@@ -131,8 +128,8 @@ export class Arena {
       conveyorLongRed,
       rampBlue,
       rampRed,
-      swiperBlue,
       swiperRed,
+      sawTrapLongBlue,
       scatteredPropModels,
       ballAndChainModels,
     ] = await Promise.all([
@@ -144,8 +141,8 @@ export class Arena {
       loadConveyorModel(platformerAsset("red", "conveyor_4x8x1")),
       loadModel(platformerAsset("blue", "platform_slope_4x6x4")),
       loadModel(platformerAsset("red", "platform_slope_4x6x4")),
-      loadModel(platformerAsset("blue", "swiper_double_long")),
       loadModel(platformerAsset("red", "swiper_double_long")),
+      loadModel(platformerAsset("blue", "saw_trap_long")),
       loadScatteredPropModels(),
       loadBallAndChainModels(),
     ]);
@@ -158,8 +155,8 @@ export class Arena {
     this.redConveyorLong = conveyorLongRed.model;
     this.blueRamp = rampBlue;
     this.redRamp = rampRed;
-    this.blueSwiperDoubleLong = swiperBlue;
     this.redSwiperDoubleLong = swiperRed;
+    this.blueSawTrapLong = sawTrapLongBlue;
     this.scatteredPropModels = scatteredPropModels;
     this.ballAndChainModels = ballAndChainModels;
     this.conveyorTextures = [
@@ -292,7 +289,7 @@ export class Arena {
     addBallAndChain(this.world, this.layers, this.scene, this.entities, this.ballAndChainModels);
   }
 
-  private buildSwipers() {
+  private buildRotatingObstacles() {
     addSwiper(
       this.world,
       this.layers,
@@ -303,15 +300,16 @@ export class Arena {
       -36,
       SWIPER_ANGULAR_SPEED,
     );
-    addSwiper(
+    addRotatingSawTrap(
       this.world,
       this.layers,
       this.scene,
       this.entities,
-      this.blueSwiperDoubleLong,
+      this.blueSawTrapLong,
+      this.sawTrapBlades,
       9,
       36,
-      -SWIPER_ANGULAR_SPEED,
+      SAW_TRAP_ROTATION_SPEED,
     );
   }
 }
@@ -458,61 +456,6 @@ function addModelInstances(scene: THREE.Scene, source: THREE.Group, placements: 
     }
     scene.add(object);
   }
-}
-
-function addSwiper(
-  world: World,
-  layers: PhysicsLayers,
-  scene: THREE.Scene,
-  entities: PhysicsEntity[],
-  model: THREE.Group,
-  x: number,
-  z: number,
-  targetAngularVelocity: number,
-) {
-  const object = new THREE.Group();
-  const visual = model.clone(true);
-  visual.position.y = -SWIPER_HALF_EXTENTS[1];
-  object.add(visual);
-  object.position.set(x, SWIPER_CENTER_Y, z);
-  scene.add(object);
-
-  const body = rigidBody.create(world, {
-    shape: box.create({ halfExtents: SWIPER_HALF_EXTENTS, convexRadius: 0.05 }),
-    motionType: MotionType.DYNAMIC,
-    objectLayer: layers.kinematic,
-    position: [x, SWIPER_CENTER_Y, z],
-    friction: 0.85,
-    restitution: 0.25,
-    gravityFactor: 0,
-    angularDamping: 0,
-    allowSleeping: false,
-    mass: 25,
-    maxAngularVelocity: 12,
-    userData: createSwiperBodyUserData(),
-  });
-  entities.push({ body, object });
-
-  const anchor = rigidBody.create(world, {
-    shape: box.create({ halfExtents: [0.1, 0.1, 0.1] }),
-    motionType: MotionType.STATIC,
-    objectLayer: layers.heldProp,
-    position: [x, SWIPER_CENTER_Y, z],
-  });
-
-  const hinge = hingeConstraint.create(world, {
-    bodyIdA: anchor.id,
-    bodyIdB: body.id,
-    pointA: [x, SWIPER_CENTER_Y, z],
-    pointB: [x, SWIPER_CENTER_Y, z],
-    hingeAxisA: [0, 1, 0],
-    hingeAxisB: [0, 1, 0],
-    normalAxisA: [1, 0, 0],
-    normalAxisB: [1, 0, 0],
-    space: ConstraintSpace.WORLD,
-  });
-  hingeConstraint.setMotorState(hinge, MotorState.VELOCITY);
-  hingeConstraint.setTargetAngularVelocity(hinge, targetAngularVelocity);
 }
 
 function addTiles(scene: THREE.Scene, mesh: GltfMesh, tiles: TileTransform[]) {

@@ -138,7 +138,9 @@ export class PlayerAnimator {
     }
 
     if (!state.hadGroundContact && state.hasGroundContact) {
-      this.landAnimationTimer = LAND_ANIMATION_SECONDS;
+      if (this.spawnAnimationTimer <= 0) {
+        this.landAnimationTimer = LAND_ANIMATION_SECONDS;
+      }
       this.shortJumpAnimationTimer = 0;
     } else if (state.hadGroundContact && !state.hasGroundContact && !this.hasActiveOneShotTimer()) {
       this.shortJumpAnimationTimer = SHORT_JUMP_ANIMATION_SECONDS;

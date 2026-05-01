@@ -105,6 +105,9 @@ const DASH_WALL_BOUNCE_CONTROL_LOCK = 0.18;
 const DASH_SWIPER_BOUNCE_SPEED = 12;
 const DASH_SWIPER_BOUNCE_VERTICAL_SPEED = 5;
 const DASH_SWIPER_BOUNCE_CONTROL_LOCK = 0.22;
+const DASH_RESPONSE_PLAYER_RECOIL_SPEED = 4;
+const DASH_RESPONSE_PLAYER_RECOIL_VERTICAL_SPEED = 2;
+const DASH_RESPONSE_PLAYER_CONTROL_LOCK = 0.14;
 const DASH_INITIAL_WALL_CHECK_DT = 1 / 60;
 
 export class PlayerController {
@@ -461,7 +464,7 @@ export class PlayerController {
     const dashDuration = Math.max(MIN_SAFE_DURATION, DASH_DURATION);
     const dashSpeed = DASH_IMPULSE * Math.max(0, Math.min(1, this.dashTimer / dashDuration));
 
-    if (this.tryBounceOffDashWall(world, dashSpeed, dt)) {
+    if (this.tryHandleDashImpact(world, dashSpeed, dt)) {
       return;
     }
 
@@ -472,7 +475,7 @@ export class PlayerController {
     rigidBody.setLinearVelocity(world, this.body, dashVelocity);
   }
 
-  private tryBounceOffDashWall(world: World, dashSpeed: number, dt: number) {
+  private tryHandleDashImpact(world: World, dashSpeed: number, dt: number) {
     if (dashSpeed < DASH_WALL_MIN_SPEED) {
       return false;
     }
@@ -498,6 +501,9 @@ export class PlayerController {
     let bounceSpeed = DASH_WALL_BOUNCE_SPEED;
     let bounceVerticalSpeed = DASH_WALL_BOUNCE_VERTICAL_SPEED;
     let bounceControlLock = DASH_WALL_BOUNCE_CONTROL_LOCK;
+    let dashKickBody: RigidBody | null = null;
+    let dashKick = 0;
+    let dashKickY = 0;
 
     for (const hit of dashWallCollector.hits) {
       if (hit.status !== CastShapeStatus.COLLIDING) {
@@ -510,7 +516,9 @@ export class PlayerController {
       }
 
       const isSwiperHit = isSwiperBody(hitBody);
-      if (hitBody.motionType === MotionType.DYNAMIC && !isSwiperHit) {
+      const userData = hitBody.userData as { dashKick?: number; dashKickY?: number } | null;
+      const hitDashKick = userData?.dashKick ?? 0;
+      if (hitBody.motionType === MotionType.DYNAMIC && !isSwiperHit && hitDashKick <= 0) {
         continue;
       }
 
@@ -533,11 +541,30 @@ export class PlayerController {
       bounceSpeed = isSwiperHit ? DASH_SWIPER_BOUNCE_SPEED : DASH_WALL_BOUNCE_SPEED;
       bounceVerticalSpeed = isSwiperHit ? DASH_SWIPER_BOUNCE_VERTICAL_SPEED : DASH_WALL_BOUNCE_VERTICAL_SPEED;
       bounceControlLock = isSwiperHit ? DASH_SWIPER_BOUNCE_CONTROL_LOCK : DASH_WALL_BOUNCE_CONTROL_LOCK;
+      dashKickBody = hitDashKick > 0 ? hitBody : null;
+      dashKick = hitDashKick;
+      dashKickY = userData?.dashKickY ?? 0;
       hasWallHit = true;
     }
 
     if (!hasWallHit) {
       return false;
+    }
+
+    if (dashKickBody) {
+      dashVelocity[0] = this.dashDirection[0] * dashKick;
+      dashVelocity[1] = dashKickY;
+      dashVelocity[2] = this.dashDirection[2] * dashKick;
+      rigidBody.addLinearVelocity(world, dashKickBody, dashVelocity);
+
+      dashVelocity[0] = -this.dashDirection[0] * DASH_RESPONSE_PLAYER_RECOIL_SPEED;
+      dashVelocity[1] = DASH_RESPONSE_PLAYER_RECOIL_VERTICAL_SPEED;
+      dashVelocity[2] = -this.dashDirection[2] * DASH_RESPONSE_PLAYER_RECOIL_SPEED;
+      rigidBody.setLinearVelocity(world, this.body, dashVelocity);
+      this.dashTimer = 0;
+      this.dashBounceControlTimer = DASH_RESPONSE_PLAYER_CONTROL_LOCK;
+      this.animator.startWallHit();
+      return true;
     }
 
     dashVelocity[0] = dashWallNormal[0] * bounceSpeed;

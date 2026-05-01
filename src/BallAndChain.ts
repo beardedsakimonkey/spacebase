@@ -196,6 +196,7 @@ function addSpikeball(
     linearDamping: 0.02,
     angularDamping: 0.08,
     motionQuality: MotionQuality.LINEAR_CAST,
+    userData: { dashKick: 18, dashKickY: 3 },
   });
   rigidBody.setLinearVelocity(world, body, INITIAL_SPIKEBALL_VELOCITY);
   entities.push({ body, object });

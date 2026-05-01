@@ -26,6 +26,7 @@ import type { MovementInput } from "./input";
 import { getConveyorVelocity } from "./Conveyor";
 import { PlayerAnimator, type PlayerAnimationName } from "./PlayerAnimator";
 import type { PhysicsLayers } from "./physics";
+import { isSwiperBody } from "./Swiper";
 
 export type PlayerTelemetry = {
   speed: number;
@@ -101,6 +102,9 @@ const DASH_WALL_MIN_OPPOSING_DOT = 0.35;
 const DASH_WALL_BOUNCE_SPEED = 8;
 const DASH_WALL_BOUNCE_VERTICAL_SPEED = -2;
 const DASH_WALL_BOUNCE_CONTROL_LOCK = 0.18;
+const DASH_SWIPER_BOUNCE_SPEED = 12;
+const DASH_SWIPER_BOUNCE_VERTICAL_SPEED = 5;
+const DASH_SWIPER_BOUNCE_CONTROL_LOCK = 0.22;
 const DASH_INITIAL_WALL_CHECK_DT = 1 / 60;
 
 export class PlayerController {
@@ -491,6 +495,9 @@ export class PlayerController {
 
     let closestWallFraction = Infinity;
     let hasWallHit = false;
+    let bounceSpeed = DASH_WALL_BOUNCE_SPEED;
+    let bounceVerticalSpeed = DASH_WALL_BOUNCE_VERTICAL_SPEED;
+    let bounceControlLock = DASH_WALL_BOUNCE_CONTROL_LOCK;
 
     for (const hit of dashWallCollector.hits) {
       if (hit.status !== CastShapeStatus.COLLIDING) {
@@ -498,7 +505,12 @@ export class PlayerController {
       }
 
       const hitBody = rigidBody.get(world, hit.bodyIdB);
-      if (!hitBody || hitBody.motionType === MotionType.DYNAMIC) {
+      if (!hitBody) {
+        continue;
+      }
+
+      const isSwiperHit = isSwiperBody(hitBody);
+      if (hitBody.motionType === MotionType.DYNAMIC && !isSwiperHit) {
         continue;
       }
 
@@ -518,6 +530,9 @@ export class PlayerController {
       dashWallNormal[0] = normalX;
       dashWallNormal[1] = 0;
       dashWallNormal[2] = normalZ;
+      bounceSpeed = isSwiperHit ? DASH_SWIPER_BOUNCE_SPEED : DASH_WALL_BOUNCE_SPEED;
+      bounceVerticalSpeed = isSwiperHit ? DASH_SWIPER_BOUNCE_VERTICAL_SPEED : DASH_WALL_BOUNCE_VERTICAL_SPEED;
+      bounceControlLock = isSwiperHit ? DASH_SWIPER_BOUNCE_CONTROL_LOCK : DASH_WALL_BOUNCE_CONTROL_LOCK;
       hasWallHit = true;
     }
 
@@ -525,12 +540,12 @@ export class PlayerController {
       return false;
     }
 
-    dashVelocity[0] = dashWallNormal[0] * DASH_WALL_BOUNCE_SPEED;
-    dashVelocity[1] = DASH_WALL_BOUNCE_VERTICAL_SPEED;
-    dashVelocity[2] = dashWallNormal[2] * DASH_WALL_BOUNCE_SPEED;
+    dashVelocity[0] = dashWallNormal[0] * bounceSpeed;
+    dashVelocity[1] = bounceVerticalSpeed;
+    dashVelocity[2] = dashWallNormal[2] * bounceSpeed;
     rigidBody.setLinearVelocity(world, this.body, dashVelocity);
     this.dashTimer = 0;
-    this.dashBounceControlTimer = DASH_WALL_BOUNCE_CONTROL_LOCK;
+    this.dashBounceControlTimer = bounceControlLock;
     this.animator.startWallHit();
     return true;
   }

@@ -21,6 +21,7 @@ import {
   loadConveyorModel,
 } from "./Conveyor";
 import { addScatteredProps, loadScatteredPropModels, type ScatteredPropModels } from "./ScatteredProps";
+import { createSwiperBodyUserData } from "./Swiper";
 import { buildInstancedMesh, loadGltfMesh, loadGltfScene, type GltfMesh, type TileTransform } from "./util/kaykit";
 import type { PhysicsEntity, PhysicsLayers } from "./physics";
 import { addSky } from "./Sky";
@@ -478,6 +479,7 @@ function addSwiper(
     allowSleeping: false,
     mass: 25,
     maxAngularVelocity: 12,
+    userData: createSwiperBodyUserData(),
   });
   entities.push({ body, object });
 

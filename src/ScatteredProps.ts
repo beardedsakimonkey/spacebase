@@ -69,7 +69,7 @@ export const SCATTERED_PROPS: ScatteredPropPlacement[] = [
     model: "ball",
     x: 0,
     y: 1.8,
-    z: -2.5,
+    z: 20.5,
     radius: 1,
     dynamic: true,
     friction: 1.6,

@@ -20,6 +20,7 @@ import {
   createConveyorListener,
   loadConveyorModel,
 } from "./Conveyor";
+import { addBallAndChain, loadBallAndChainModels, type BallAndChainModels } from "./BallAndChain";
 import { addScatteredProps, loadScatteredPropModels, type ScatteredPropModels } from "./ScatteredProps";
 import { createSwiperBodyUserData } from "./Swiper";
 import { buildInstancedMesh, loadGltfMesh, loadGltfScene, type GltfMesh, type TileTransform } from "./util/kaykit";
@@ -89,6 +90,7 @@ export class Arena {
   private blueSwiperDoubleLong!: THREE.Group;
   private redSwiperDoubleLong!: THREE.Group;
   private scatteredPropModels!: ScatteredPropModels;
+  private ballAndChainModels!: BallAndChainModels;
   private conveyorTextures: THREE.Texture[] = [];
 
   private constructor(
@@ -109,6 +111,7 @@ export class Arena {
     arena.buildBoundaryWalls();
     arena.buildRaisedDecks();
     arena.buildScatteredProps();
+    arena.buildBallAndChain();
     arena.buildSwipers();
 
     return arena;
@@ -131,6 +134,7 @@ export class Arena {
       swiperBlue,
       swiperRed,
       scatteredPropModels,
+      ballAndChainModels,
     ] = await Promise.all([
       loadGltfMesh(platformerAsset("blue", "platform_6x6x4")),
       loadGltfMesh(platformerAsset("red", "platform_6x6x4")),
@@ -143,6 +147,7 @@ export class Arena {
       loadModel(platformerAsset("blue", "swiper_double_long")),
       loadModel(platformerAsset("red", "swiper_double_long")),
       loadScatteredPropModels(),
+      loadBallAndChainModels(),
     ]);
 
     this.bluePlatform6x6x4 = platform6x6x4Blue;
@@ -156,6 +161,7 @@ export class Arena {
     this.blueSwiperDoubleLong = swiperBlue;
     this.redSwiperDoubleLong = swiperRed;
     this.scatteredPropModels = scatteredPropModels;
+    this.ballAndChainModels = ballAndChainModels;
     this.conveyorTextures = [
       ...conveyorLongBlue.textures,
       ...conveyorLongRed.textures,
@@ -280,6 +286,10 @@ export class Arena {
 
   private buildScatteredProps() {
     addScatteredProps(this.world, this.layers, this.scene, this.entities, this.scatteredPropModels);
+  }
+
+  private buildBallAndChain() {
+    addBallAndChain(this.world, this.layers, this.scene, this.entities, this.ballAndChainModels);
   }
 
   private buildSwipers() {

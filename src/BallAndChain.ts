@@ -21,13 +21,14 @@ export type BallAndChainModels = {
   spikeballHanger: THREE.Group;
 };
 
-const ANCHOR_POSITION: Vec3 = [0, 7.3, 0];
+const ANCHOR_POSITION: Vec3 = [0, 13, 0];
 const ANCHOR_HALF_EXTENTS: Vec3 = [1, 0.1, 1];
-const LINK_COUNT = 14;
+const LINK_COUNT = 22;
 const LINK_HALF_EXTENTS: Vec3 = [0.24, 0.34, 0.08];
 const LINK_CENTER_SPACING = 0.48;
 const LINK_JOINT_OFFSET = LINK_CENTER_SPACING * 0.5;
 const LINK_ALLOWED_DEGREES_OF_FREEDOM = dof(true, true, true, true, false, true);
+const LINK_MASS = .12;
 const SPIKEBALL_RADIUS = 1.2;
 const SPIKEBALL_HANGER_ATTACHMENT_OFFSET = 1.5;
 const SPIKEBALL_MASS = 9;
@@ -158,7 +159,7 @@ function addChainLinks(
       quaternion,
       friction: 0.65,
       restitution: 0.08,
-      mass: 0.22,
+      mass: LINK_MASS,
       linearDamping: 0.06,
       angularDamping: 0.5,
       maxAngularVelocity: 5,

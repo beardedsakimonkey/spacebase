@@ -74,7 +74,7 @@ export const SCATTERED_PROPS: ScatteredPropPlacement[] = [
     dynamic: true,
     friction: 1.6,
     restitution: 0.55,
-    mass: 0.85,
+    mass: 0.2,
     linearDamping: 0.04,
     angularDamping: 0.2,
   },
